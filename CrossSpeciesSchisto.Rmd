@@ -1,0 +1,1199 @@
+---
+title: "CrossSpeciesSchisto"
+author: "Rahul"
+date: "2024-09-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(Matrix)
+library(dplyr)
+library(Seurat)
+library(SingleCellExperiment)
+library(SummarizedExperiment)
+library(BiocParallel)
+library(parallel)
+library(batchtools)
+library(ggplot2)
+library(limma)
+library(dsb)
+library(AnnotationHub)
+library(hgu95av2.db)
+library(ensembldb)
+library(stringr)
+library(org.Mmu.eg.db)
+library(deMULTIplex2)
+library(DropletUtils)
+library(plyranges)
+library(SingleR)
+library(celldex)
+library(harmony)
+library(cyCombine)
+library(clustree)
+library(scCustomize)
+library(SingleCellExperiment)
+library(miloR)
+library(scater)
+library(qs)
+library(magrittr)
+library(Nebulosa)
+library(xlsx)
+```
+
+```{r}
+gemclass1 <- read.csv("schisto cite-seq/gem_classification1.csv")
+
+gemclass2 <- read.csv("schisto cite-seq/gem_classification2.csv")
+
+filteredbarcodes1 <- read.csv("schisto cite-seq/sample_filtered_barcodes1.csv")
+
+filteredbarcodes2 <- read.csv("schisto cite-seq/sample_filtered_barcodes2.csv")
+
+seuratraw1 = readRDS("schisto cite-seq/seuratraw1")
+
+seuratraw2 = readRDS("schisto cite-seq/seuratraw2")
+
+seuratfilt1 = readRDS("schisto cite-seq/seuratfilt1")
+
+seuratfilt2 = readRDS("schisto cite-seq/seuratfilt2")
+
+HTO1 = grep(pattern = "^Hu-|^Rh-", rownames(seuratfilt1), value = TRUE)
+HTO2 = grep(pattern = "^Hu-|^Rh-", rownames(seuratfilt2), value = TRUE)
+
+ADT1 = grep(pattern = "^Hu-|^Rh-|^Mmul-|^GRCh38-", rownames(seuratfilt1), value = TRUE, invert = TRUE)
+ADT2 = grep(pattern = "^Hu-|^Rh-|^Mmul-|^GRCh38-", rownames(seuratfilt2), value = TRUE, invert = TRUE)
+
+workdir <- "schisto cite-seq"
+workdirrna <- paste(workdir,"plots/RNA",sep="/")
+workdiradt <- paste(workdir,"plots/ADT",sep="/")
+workdirhto <- paste(workdir,"plots/HTO",sep="/")
+```
+
+```{r}
+seuratfilt1[["HTO"]] <- CreateAssayObject(counts = LayerData(seuratfilt1, layer = "counts.Antibody Capture", features = HTO1))
+seuratfilt2[["HTO"]] <- CreateAssayObject(counts = LayerData(seuratfilt2, layer = "counts.Antibody Capture", features = HTO2))
+
+seuratfilt1[["ADT"]] <- CreateAssayObject(counts = LayerData(seuratfilt1, layer = "counts.Antibody Capture", features = ADT1))
+seuratfilt2[["ADT"]] <- CreateAssayObject(counts = LayerData(seuratfilt2, layer = "counts.Antibody Capture", features = ADT2))
+
+temp <- grep(pattern = "^Mmul-|^GRCh38-", rownames(seuratfilt1))
+seuratfilt1@assays[["RNA"]]@layers[["counts.Gene Expression"]] <- seuratfilt1@assays[["RNA"]]@layers[["counts.Gene Expression"]][temp,]
+LayerData(seuratfilt1, layer = "counts.Antibody Capture", assay = "RNA") <- NULL
+
+temp <- grep(pattern = "^Mmul-|^GRCh38-", rownames(seuratfilt2))
+seuratfilt2@assays[["RNA"]]@layers[["counts.Gene Expression"]] <- seuratfilt2@assays[["RNA"]]@layers[["counts.Gene Expression"]][temp,]
+LayerData(seuratfilt2, layer = "counts.Antibody Capture", assay = "RNA") <- NULL
+
+#Gene References
+refs <- rtracklayer::import(con=paste(workdir,"genes.gtf",sep="/"),format="gtf")
+
+#Extract mitochondrial genes
+Mmulmtgenemetadata <- select(as.data.frame(filter(refs, seqnames == "Mmul_10_NC_005943.1")@elementMetadata@listData),c("locus_tag","gene"))
+Mmulmt <- unique(filter(refs, seqnames == "Mmul_10_NC_005943.1")@elementMetadata@listData[["gene_id"]])
+Mmulmt <- gsub("_","-",Mmulmt)
+
+Humtgenemetadata <- select(as.data.frame(filter(refs, seqnames == "GRCh38__chrM")@elementMetadata@listData),c("gene_name","gene_id"))
+Humt <- unique(filter(refs, seqnames == "GRCh38__chrM")@elementMetadata@listData[["gene_id"]])
+Humt <- gsub("GRCh38__","",Humt)
+
+Hugenemetadata <- as.data.frame(refs@elementMetadata@listData[["gene_name"]])
+Hugenemetadata$gene_id <- refs@elementMetadata@listData[["gene_id"]]
+Hugenemetadata <- unique(Hugenemetadata)
+colnames(Hugenemetadata) <- c("gene_name","gene_id")
+Hugenemetadata <- filter(Hugenemetadata,stringr::str_detect(gene_name, "^GRCh38__"))
+Hugenemetadata$gene_id <- gsub("GRCh38__","",Hugenemetadata$gene_id)
+Hugenemetadata$gene_name <- gsub("__","--",Hugenemetadata$gene_name)
+
+Hugenemetadata$gene_name <- mapIds(hgu95av2.db, keys=Hugenemetadata$gene_id, column=c("SYMBOL"), keytype="ENSEMBL")
+Hugenemetadata$gene_name[is.na(Hugenemetadata$gene_name)] <- Hugenemetadata$gene_id[is.na(Hugenemetadata$gene_name)]
+Hugenemetadata$hasduplicate <- duplicated(Hugenemetadata$gene_name)
+rownames(Hugenemetadata) <- Hugenemetadata$gene_id
+Hugenemetadata$gene_name[duplicated(Hugenemetadata$gene_name)] <- Hugenemetadata$gene_id[duplicated(Hugenemetadata$gene_name)]
+#Humt <- mapIds(hgu95av2.db, keys=Humt, column=c("SYMBOL"), keytype="ENSEMBL")
+
+ensembl_recode_clean <- function(x) {
+  temp <- Hugenemetadata[x,]
+  x <- temp$gene_name
+  x
+}
+
+#Dataset 1
+res3 <- hashedDrops(seuratfilt1@assays[["HTO"]]@counts, confident.min = 0.5)
+
+res3$Assignment <- "unassigned"
+temp <- res3$Best
+for(i in 1:nrow(res3)) {
+  temp2 <- res3$Best[i]
+  temp[i] <- rownames(seuratfilt1@assays[["HTO"]]@counts)[temp2]
+}
+res3$Assignment <- temp
+res3$Species <- ifelse(stringr::str_detect(res3$Assignment,"^Hu-"), "Human", "Rhesus Macaque")
+res3$Cell <- rownames(res3)
+rownames(res3) <- NULL
+
+seuratfilt1$sample <- res3$Assignment
+seuratfilt1$species <- res3$Species
+seuratfilt1$assignconf <- res3$Confident
+seuratfilt1$time <- gsub("..-..-","",seuratfilt1$sample)
+seuratfilt1$individual <- stringr::str_sub(seuratfilt1$sample,start=1,end=5)
+
+temp <- SplitObject(SplitObject(seuratfilt1, split.by = "assignconf")[["TRUE"]], split.by = "species")
+seurat1human <- temp[["Human"]]
+seurat1mmul <- temp[["Rhesus Macaque"]]
+
+temp<-grep("^GRCh38-",rownames(seurat1human))
+temp2<-CreateAssayObject(counts = LayerData(seurat1human, layer = "counts.Gene Expression", features = temp))
+DefaultAssay(seurat1human)<-"ADT"
+seurat1human[["RNA"]] <- NULL
+seurat1human[["RNA"]] <- temp2
+DefaultAssay(seurat1human)<-"RNA"
+#Use ensembl ids instead (provided in Hugenemetadata$gene_id)
+rownames(seurat1human@assays[["RNA"]]@counts) <- Hugenemetadata$gene_id
+rownames(seurat1human@assays[["RNA"]]@data) <- Hugenemetadata$gene_id
+rownames(seurat1human@assays[["RNA"]]@meta.features) <- Hugenemetadata$gene_id
+
+temp<-grep("^Mmul-",rownames(seurat1mmul))
+temp2<-CreateAssayObject(counts = LayerData(seurat1mmul, layer = "counts.Gene Expression", features = temp))
+DefaultAssay(seurat1mmul)<-"ADT"
+seurat1mmul[["RNA"]] <- NULL
+seurat1mmul[["RNA"]] <- temp2
+DefaultAssay(seurat1mmul)<-"RNA"
+
+temp <- seuratfilt1
+temp$Assign <- ifelse(temp$assignconf,temp$sample,NA)
+temp$AssignType <- res3$Doublet
+temp$AssignType <- ifelse(temp$AssignType,"Multiplet",temp$AssignType)
+temp$AssignType <- ifelse(temp$assignconf,"Singlet",temp$AssignType)
+temp$AssignType <- ifelse(temp$AssignType==F,"Negative",temp$AssignType)
+
+DefaultAssay(temp) <- "HTO"
+temp <- NormalizeData(temp, normalization.method = "CLR", verbose = FALSE)
+temp <- FindVariableFeatures(temp, nfeatures = 15, verbose = FALSE)
+temp <- ScaleData(temp, verbose = FALSE)
+temp <- RunPCA(temp, features = VariableFeatures(object = temp, nfeatures = 15), npcs = 10, verbose = FALSE)
+temp <- FindNeighbors(temp, dims = 1:10, verbose = FALSE)
+temp <- FindClusters(temp, resolution = 0.5, verbose = FALSE)
+temp <- RunUMAP(temp, dims = 1:10)
+p1<-DimPlot(temp, reduction = "umap", group.by = "Assign")
+p2<-DimPlot(temp, reduction = "umap", group.by = "AssignType")
+ggsave(filename="DropletUtilsWell1_1.png",plot=p1,device="png",dpi=600,path=workdirhto,height=7,width=7)
+ggsave(filename="DropletUtilsWell1_2.png",plot=p2,device="png",dpi=600,path=workdirhto,height=7,width=7)
+
+Idents(temp) <- "Assign"
+temppath <- paste(workdirhto,"DropletUtilsRidgePlots",sep="/")
+for(i in 1:7) {
+  p<-RidgePlot(temp, assay = "HTO", features = rownames(temp[["HTO"]])[(2*i-1):(2*i)], ncol = 2)
+  tempname <- paste("DropletUtils_ridgeplot", rownames(temp[["HTO"]])[2*i-1],"_Well1.png",sep="")
+  ggsave(filename=tempname,plot=p,device="png",dpi=600,path=temppath,height=7,width=7)
+}
+
+#Dataset 2
+res4 <- hashedDrops(seuratfilt2@assays[["HTO"]]@counts, confident.min = 0.5)
+
+res4$Assignment <- "unassigned"
+temp <- res4$Best
+for(i in 1:nrow(res4)) {
+  temp2 <- res4$Best[i]
+  temp[i] <- rownames(seuratfilt2@assays[["HTO"]]@counts)[temp2]
+}
+res4$Assignment <- temp
+res4$Species <- ifelse(stringr::str_detect(res4$Assignment,"^Hu-"), "Human", "Rhesus Macaque")
+res4$Cell <- rownames(res4)
+rownames(res4) <- NULL
+
+seuratfilt2$sample <- res4$Assignment
+seuratfilt2$species <- res4$Species
+seuratfilt2$assignconf <- res4$Confident
+seuratfilt2$time <- gsub("..-..-","",seuratfilt2$sample)
+seuratfilt2$individual <- stringr::str_sub(seuratfilt2$sample,start=1,end=5)
+
+temp <- SplitObject(SplitObject(seuratfilt2, split.by = "assignconf")[["TRUE"]], split.by = "species")
+seurat2human <- temp[["Human"]]
+seurat2mmul <- temp[["Rhesus Macaque"]]
+
+temp<-grep("^GRCh38-",rownames(seurat2human))
+temp2<-CreateAssayObject(counts = LayerData(seurat2human, layer = "counts.Gene Expression", features = temp))
+DefaultAssay(seurat2human)<-"ADT"
+seurat2human[["RNA"]] <- NULL
+seurat2human[["RNA"]] <- temp2
+DefaultAssay(seurat2human)<-"RNA"
+#Use ensembl ids instead (provided in Hugenemetadata$gene_id)
+rownames(seurat2human@assays[["RNA"]]@counts) <- Hugenemetadata$gene_id
+rownames(seurat2human@assays[["RNA"]]@data) <- Hugenemetadata$gene_id
+rownames(seurat2human@assays[["RNA"]]@meta.features) <- Hugenemetadata$gene_id
+
+temp<-grep("^Mmul-",rownames(seurat2mmul))
+temp2<-CreateAssayObject(counts = LayerData(seurat2mmul, layer = "counts.Gene Expression", features = temp))
+DefaultAssay(seurat2mmul)<-"ADT"
+seurat2mmul[["RNA"]] <- NULL
+seurat2mmul[["RNA"]] <- temp2
+DefaultAssay(seurat2mmul)<-"RNA"
+
+temp <- seuratfilt2
+temp$Assign <- ifelse(temp$assignconf,temp$sample,NA)
+temp$AssignType <- res4$Doublet
+temp$AssignType <- ifelse(temp$AssignType,"Multiplet",temp$AssignType)
+temp$AssignType <- ifelse(temp$assignconf,"Singlet",temp$AssignType)
+temp$AssignType <- ifelse(temp$AssignType==F,"Negative",temp$AssignType)
+
+DefaultAssay(temp) <- "HTO"
+temp <- NormalizeData(temp, normalization.method = "CLR", verbose = FALSE)
+temp <- FindVariableFeatures(temp, nfeatures = 15, verbose = FALSE)
+temp <- ScaleData(temp, verbose = FALSE)
+temp <- RunPCA(temp, features = VariableFeatures(object = temp, nfeatures = 15), npcs = 10, verbose = FALSE)
+temp <- FindNeighbors(temp, dims = 1:10, verbose = FALSE)
+temp <- FindClusters(temp, resolution = 0.5, verbose = FALSE)
+temp <- RunUMAP(temp, dims = 1:10)
+p1<-DimPlot(temp, reduction = "umap", group.by = "Assign")
+p2<-DimPlot(temp, reduction = "umap", group.by = "AssignType")
+ggsave(filename="DropletUtilsWell2_1.png",plot=p1,device="png",dpi=600,path=workdirhto,height=7,width=7)
+ggsave(filename="DropletUtilsWell2_2.png",plot=p2,device="png",dpi=600,path=workdirhto,height=7,width=7)
+
+Idents(temp) <- "Assign"
+temppath <- paste(workdirhto,"DropletUtilsRidgePlots",sep="/")
+for(i in 1:7) {
+  p<-RidgePlot(temp, assay = "HTO", features = rownames(temp[["HTO"]])[(2*i-1):(2*i)], ncol = 2)
+  tempname <- paste("DropletUtils_ridgeplot", rownames(temp[["HTO"]])[2*i-1],"_Well2.png",sep="")
+  ggsave(filename=tempname,plot=p,device="png",dpi=600,path=temppath,height=7,width=7)
+}
+```
+
+```{r}
+seurat1human$mtpct <- Matrix::colSums(seurat1human[["RNA"]]$counts[Humt, ])/Matrix::colSums(seurat1human[["RNA"]]$counts)
+seurat1mmul$mtpct <- Matrix::colSums(seurat1mmul[["RNA"]]$counts[Mmulmt, ])/Matrix::colSums(seurat1mmul[["RNA"]]$counts)
+
+seurat2human$mtpct <- Matrix::colSums(seurat2human[["RNA"]]$counts[Humt, ])/Matrix::colSums(seurat2human[["RNA"]]$counts)
+seurat2mmul$mtpct <- Matrix::colSums(seurat2mmul[["RNA"]]$counts[Mmulmt, ])/Matrix::colSums(seurat2mmul[["RNA"]]$counts)
+
+rhesusribo <- grep("-RP[S|L]", rownames(seurat1mmul), value = T)
+seurat1human <- Add_Mito_Ribo(object = seurat1human, species = "Human", ensembl_ids = T)
+seurat2human <- Add_Mito_Ribo(object = seurat2human, species = "Human", ensembl_ids = T)
+seurat1mmul <- Add_Mito_Ribo(object = seurat1mmul, species = "other", mito_features = Mmulmt, ribo_features = rhesusribo)
+seurat2mmul <- Add_Mito_Ribo(object = seurat2mmul, species = "other", mito_features = Mmulmt, ribo_features = rhesusribo)
+
+seurat1human <- Add_Cell_Complexity(object = seurat1human)
+seurat1mmul <- Add_Cell_Complexity(object = seurat1mmul)
+seurat2human <- Add_Cell_Complexity(object = seurat2human)
+seurat2mmul <- Add_Cell_Complexity(object = seurat2mmul)
+
+p1<-VlnPlot(seurat1human, features = c("nFeature_RNA", "nCount_RNA", "mtpct"), ncol = 3)
+p2<-VlnPlot(seurat1mmul, features = c("nFeature_RNA", "nCount_RNA", "mtpct"), ncol = 3)
+p3<-VlnPlot(seurat2human, features = c("nFeature_RNA", "nCount_RNA", "mtpct"), ncol = 3)
+p4<-VlnPlot(seurat2mmul, features = c("nFeature_RNA", "nCount_RNA", "mtpct"), ncol = 3)
+
+ggsave(filename="Vln_human_1.png",plot=p1,device="png",dpi=600,path=workdirrna)
+ggsave(filename="Vln_rhesus_1.png",plot=p2,device="png",dpi=600,path=workdirrna)
+ggsave(filename="Vln_human_2.png",plot=p3,device="png",dpi=600,path=workdirrna)
+ggsave(filename="Vln_rhesus_2.png",plot=p4,device="png",dpi=600,path=workdirrna)
+
+humansampleorder <- c("Hu-D1-W0","Hu-D1-W8","Hu-D1-W22","Hu-D2-W0","Hu-D2-W8","Hu-D2-W22")
+rhesussampleorder <- c("Rh-D1-W8","Rh-D1-W22","Rh-D2-W0","Rh-D2-W8","Rh-D2-W22","Rh-D3-W0","Rh-D3-W8","Rh-D3-W22")
+
+temp <- as.data.frame(seurat1human$nFeature_RNA)
+colnames(temp)<-"x"
+temp$origin <- "human dataset 1"
+temp$sample <- seurat1human$sample
+temp2 <- as.data.frame(seurat1mmul$nFeature_RNA)
+colnames(temp2)<-"x"
+temp2$origin <- "rhesus dataset 1"
+temp2$sample <- seurat1mmul$sample
+temp3 <- as.data.frame(seurat2human$nFeature_RNA)
+colnames(temp3)<-"x"
+temp3$origin <- "human dataset 2"
+temp3$sample <- seurat2human$sample
+temp4 <- as.data.frame(seurat2mmul$nFeature_RNA)
+colnames(temp4)<-"x"
+temp4$origin <- "rhesus dataset 2"
+temp4$sample <- seurat2mmul$sample
+temp<-rbind(temp,temp2,temp3,temp4)
+colnames(temp) <- c("Feature Size","Origin","Sample")
+
+p<-ggplot(temp, aes(x=Origin, y=`Feature Size`)) + geom_violin(aes(fill=Origin), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank())
+ggsave(filename="FeatureSizeComparison.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+
+p <- temp %>% mutate(Sample = forcats::fct_relevel(Sample, c(humansampleorder,rhesussampleorder))) %>% ggplot(aes(x=Sample, y=`Feature Size`)) + geom_violin(aes(fill=Sample), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank())
+ggsave(filename="FeatureSizeComparisonSamples.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=12)
+
+temp <- as.data.frame(seurat1human$nCount_RNA)
+colnames(temp)<-"x"
+temp$origin <- "human dataset 1"
+temp$sample <- seurat1human$sample
+temp2 <- as.data.frame(seurat1mmul$nCount_RNA)
+colnames(temp2)<-"x"
+temp2$origin <- "rhesus dataset 1"
+temp2$sample <- seurat1mmul$sample
+temp3 <- as.data.frame(seurat2human$nCount_RNA)
+colnames(temp3)<-"x"
+temp3$origin <- "human dataset 2"
+temp3$sample <- seurat2human$sample
+temp4 <- as.data.frame(seurat2mmul$nCount_RNA)
+colnames(temp4)<-"x"
+temp4$origin <- "rhesus dataset 2"
+temp4$sample <- seurat2mmul$sample
+temp<-rbind(temp,temp2,temp3,temp4)
+colnames(temp) <- c("Library Size","Origin","Sample")
+
+p<-ggplot(temp, aes(x=Origin, y=`Library Size`)) + geom_violin(aes(fill=Origin), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank()) + scale_y_continuous(limits=c(0,10000))
+ggsave(filename="LibrarySizeComparison.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+
+p <- temp %>% mutate(Sample = forcats::fct_relevel(Sample, c(humansampleorder,rhesussampleorder))) %>% ggplot(aes(x=Sample, y=`Library Size`)) + geom_violin(aes(fill=Sample), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank()) + scale_y_continuous(limits=c(0,10000))
+ggsave(filename="LibrarySizeComparisonSamples.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=12)
+
+temp <- as.data.frame(seurat1human$mtpct)
+colnames(temp)<-"x"
+temp$origin <- "human dataset 1"
+temp$sample <- seurat1human$sample
+temp2 <- as.data.frame(seurat1mmul$mtpct)
+colnames(temp2)<-"x"
+temp2$origin <- "rhesus dataset 1"
+temp2$sample <- seurat1mmul$sample
+temp3 <- as.data.frame(seurat2human$mtpct)
+colnames(temp3)<-"x"
+temp3$origin <- "human dataset 2"
+temp3$sample <- seurat2human$sample
+temp4 <- as.data.frame(seurat2mmul$mtpct)
+colnames(temp4)<-"x"
+temp4$origin <- "rhesus dataset 2"
+temp4$sample <- seurat2mmul$sample
+temp<-rbind(temp,temp2,temp3,temp4)
+colnames(temp) <- c("Mitochondrial Fraction","Origin","Sample")
+
+p<-ggplot(temp, aes(x=Origin, y=`Mitochondrial Fraction`)) + geom_violin(aes(fill=Origin), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank()) + scale_y_continuous(limits=c(0,0.1))
+ggsave(filename="MtpctComparison.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+
+p <- temp %>% mutate(Sample = forcats::fct_relevel(Sample, c(humansampleorder,rhesussampleorder))) %>% ggplot(aes(x=Sample, y=`Mitochondrial Fraction`)) + geom_violin(aes(fill=Sample), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank()) + scale_y_continuous(limits=c(0,0.1))
+ggsave(filename="MitopctComparisonSamples.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=12)
+
+temp <- as.data.frame(seurat1human$percent_ribo)
+colnames(temp)<-"x"
+temp$origin <- "human dataset 1"
+temp$sample <- seurat1human$sample
+temp2 <- as.data.frame(seurat1mmul$percent_ribo)
+colnames(temp2)<-"x"
+temp2$origin <- "rhesus dataset 1"
+temp2$sample <- seurat1mmul$sample
+temp3 <- as.data.frame(seurat2human$percent_ribo)
+colnames(temp3)<-"x"
+temp3$origin <- "human dataset 2"
+temp3$sample <- seurat2human$sample
+temp4 <- as.data.frame(seurat2mmul$percent_ribo)
+colnames(temp4)<-"x"
+temp4$origin <- "rhesus dataset 2"
+temp4$sample <- seurat2mmul$sample
+temp<-rbind(temp,temp2,temp3,temp4)
+colnames(temp) <- c("Ribosomal Fraction","Origin","Sample")
+temp$`Ribosomal Fraction` <- temp$`Ribosomal Fraction`/100
+
+p<-ggplot(temp, aes(x=Origin, y=`Ribosomal Fraction`)) + geom_violin(aes(fill=Origin), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank())
+ggsave(filename="RibopctComparison.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+
+p <- temp %>% mutate(Sample = forcats::fct_relevel(Sample, c(humansampleorder,rhesussampleorder))) %>% ggplot(aes(x=Sample, y=`Ribosomal Fraction`)) + geom_violin(aes(fill=Sample), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank())
+ggsave(filename="RibopctComparisonSamples.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=12)
+
+temp <- as.data.frame(seurat1human$log10GenesPerUMI)
+colnames(temp)<-"x"
+temp$origin <- "human dataset 1"
+temp$sample <- seurat1human$sample
+temp2 <- as.data.frame(seurat1mmul$log10GenesPerUMI)
+colnames(temp2)<-"x"
+temp2$origin <- "rhesus dataset 1"
+temp2$sample <- seurat1mmul$sample
+temp3 <- as.data.frame(seurat2human$log10GenesPerUMI)
+colnames(temp3)<-"x"
+temp3$origin <- "human dataset 2"
+temp3$sample <- seurat2human$sample
+temp4 <- as.data.frame(seurat2mmul$log10GenesPerUMI)
+colnames(temp4)<-"x"
+temp4$origin <- "rhesus dataset 2"
+temp4$sample <- seurat2mmul$sample
+temp<-rbind(temp,temp2,temp3,temp4)
+colnames(temp) <- c("Cell Complexity","Origin","Sample")
+
+p<-ggplot(temp, aes(x=Origin, y=`Cell Complexity`)) + geom_violin(aes(fill=Origin), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank())
+ggsave(filename="CellComplexityComparison.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+
+p <- temp %>% mutate(Sample = forcats::fct_relevel(Sample, c(humansampleorder,rhesussampleorder))) %>% ggplot(aes(x=Sample, y=`Cell Complexity`)) + geom_violin(aes(fill=Sample), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank())
+ggsave(filename="CellComplexityComparisonSamples.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=12)
+```
+
+```{r}
+temp2 <- as.data.frame(seurat1human$nFeature_RNA)
+temp2 <- cbind(temp2, as.data.frame(seurat1human$nCount_RNA))
+temp2 <- cbind(temp2, as.data.frame(seurat1human$mtpct))
+temp2 <- cbind(temp2, as.data.frame(seurat1human$percent_ribo))
+temp2 <- cbind(temp2, as.data.frame(seurat1human$log10GenesPerUMI))
+colnames(temp2) <- c("nFeature", "nCount", "MtPct", "RiboPct", "CellComplexity")
+temp2 <- t(temp2)
+temp<-CreateAssayObject(counts = temp2)
+seurat1human[["QC"]] <- temp
+seurat1human[["QC"]]$data <- seurat1human[["QC"]]$counts
+seurat1human <- ScaleData(seurat1human, features = rownames(seurat1human[["QC"]]), assay = "QC",verbose = FALSE)
+seurat1human <- RunPCA(seurat1human, assay = "QC", features = rownames(seurat1human[["QC"]]), reduction.name = "qpca")
+p<-DimPlot(seurat1human, reduction = "qpca") + NoLegend()
+ggsave(filename="QCPCAHuman1.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+seurat1human <- FindNeighbors(seurat1human, reduction = "qpca", dims = 1:4, verbose = FALSE)
+seurat1human <- FindClusters(seurat1human, graph.name = "QC_nn", resolution = 0.5, verbose = FALSE)
+seurat1human <- RunUMAP(seurat1human, dims = 1:4, reduction = "qpca", reduction.name = "qumap", verbose = FALSE)
+p<-DimPlot(seurat1human, reduction = "qumap") + NoLegend()
+ggsave(filename="QCUMAPHuman1.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+
+temp2 <- as.data.frame(seurat1mmul$nFeature_RNA)
+temp2 <- cbind(temp2, as.data.frame(seurat1mmul$nCount_RNA))
+temp2 <- cbind(temp2, as.data.frame(seurat1mmul$mtpct))
+temp2 <- cbind(temp2, as.data.frame(seurat1mmul$percent_ribo))
+temp2 <- cbind(temp2, as.data.frame(seurat1mmul$log10GenesPerUMI))
+colnames(temp2) <- c("nFeature", "nCount", "MtPct", "RiboPct", "CellComplexity")
+temp2 <- t(temp2)
+temp<-CreateAssayObject(counts = temp2)
+seurat1mmul[["QC"]] <- temp
+seurat1mmul[["QC"]]$data <- seurat1mmul[["QC"]]$counts
+seurat1mmul <- ScaleData(seurat1mmul, features = rownames(seurat1mmul[["QC"]]), assay = "QC",verbose = FALSE)
+seurat1mmul <- RunPCA(seurat1mmul, assay = "QC", features = rownames(seurat1mmul[["QC"]]), reduction.name = "qpca")
+p<-DimPlot(seurat1mmul, reduction = "qpca") + NoLegend()
+ggsave(filename="QCPCARhesus1.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+seurat1mmul <- FindNeighbors(seurat1mmul, reduction = "qpca", dims = 1:4, verbose = FALSE)
+seurat1mmul <- FindClusters(seurat1mmul, graph.name = "QC_nn", resolution = 0.5, verbose = FALSE)
+seurat1mmul <- RunUMAP(seurat1mmul, reduction = "qpca", dims = 1:4, reduction.name = "qumap", verbose = FALSE)
+p<-DimPlot(seurat1mmul, reduction = "qumap") + NoLegend()
+ggsave(filename="QCUMAPRhesus1.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+
+temp2 <- as.data.frame(seurat2human$nFeature_RNA)
+temp2 <- cbind(temp2, as.data.frame(seurat2human$nCount_RNA))
+temp2 <- cbind(temp2, as.data.frame(seurat2human$mtpct))
+temp2 <- cbind(temp2, as.data.frame(seurat2human$percent_ribo))
+temp2 <- cbind(temp2, as.data.frame(seurat2human$log10GenesPerUMI))
+colnames(temp2) <- c("nFeature", "nCount", "MtPct", "RiboPct", "CellComplexity")
+temp2 <- t(temp2)
+temp<-CreateAssayObject(counts = temp2)
+seurat2human[["QC"]] <- temp
+seurat2human[["QC"]]$data <- seurat2human[["QC"]]$counts
+seurat2human <- ScaleData(seurat2human, features = rownames(seurat2human[["QC"]]), assay = "QC",verbose = FALSE)
+seurat2human <- RunPCA(seurat2human, assay = "QC", features = rownames(seurat2human[["QC"]]), reduction.name = "qpca")
+p<-DimPlot(seurat2human, reduction = "qpca") + NoLegend()
+ggsave(filename="QCPCAHuman2.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+seurat2human <- FindNeighbors(seurat2human, reduction = "qpca", dims = 1:4, verbose = FALSE)
+seurat2human <- FindClusters(seurat2human, graph.name = "QC_nn", resolution = 0.5, verbose = FALSE)
+seurat2human <- RunUMAP(seurat2human, dims = 1:4, reduction = "qpca", reduction.name = "qumap", verbose = FALSE)
+p<-DimPlot(seurat2human, reduction = "qumap") + NoLegend()
+ggsave(filename="QCUMAPHuman2.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+
+temp2 <- as.data.frame(seurat2mmul$nFeature_RNA)
+temp2 <- cbind(temp2, as.data.frame(seurat2mmul$nCount_RNA))
+temp2 <- cbind(temp2, as.data.frame(seurat2mmul$mtpct))
+temp2 <- cbind(temp2, as.data.frame(seurat2mmul$percent_ribo))
+temp2 <- cbind(temp2, as.data.frame(seurat2mmul$log10GenesPerUMI))
+colnames(temp2) <- c("nFeature", "nCount", "MtPct", "RiboPct", "CellComplexity")
+temp2 <- t(temp2)
+temp<-CreateAssayObject(counts = temp2)
+seurat2mmul[["QC"]] <- temp
+seurat2mmul[["QC"]]$data <- seurat2mmul[["QC"]]$counts
+seurat2mmul <- ScaleData(seurat2mmul, features = rownames(seurat2mmul[["QC"]]), assay = "QC",verbose = FALSE)
+seurat2mmul <- RunPCA(seurat2mmul, assay = "QC", features = rownames(seurat2mmul[["QC"]]), reduction.name = "qpca")
+p<-DimPlot(seurat2mmul, reduction = "qpca") + NoLegend()
+ggsave(filename="QCPCARhesus2.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+seurat2mmul <- FindNeighbors(seurat2mmul, reduction = "qpca", dims = 1:4, verbose = FALSE)
+seurat2mmul <- FindClusters(seurat2mmul, graph.name = "QC_nn", resolution = 0.5, verbose = FALSE)
+seurat2mmul <- RunUMAP(seurat2mmul, reduction = "qpca", dims = 1:4, reduction.name = "qumap", verbose = FALSE)
+p<-DimPlot(seurat2mmul, reduction = "qumap") + NoLegend()
+ggsave(filename="QCUMAPRhesus2.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+```
+
+```{r}
+
+temp <- t(c(table(seurat1human$sample),table(seurat1mmul$sample)))
+write.table(temp, file = paste(workdirrna,"before_qc_cells1.txt",sep="/"), append = FALSE, quote = TRUE, sep = "\t", eol = "\n", na = "NA", dec = ".", row.names = F, col.names = T)
+
+temp <- t(c(table(seurat2human$sample),table(seurat2mmul$sample)))
+write.table(temp, file = paste(workdirrna,"before_qc_cells2.txt",sep="/"), append = FALSE, quote = TRUE, sep = "\t", eol = "\n", na = "NA", dec = ".", row.names = F, col.names = T)
+
+seuratlist <- list(
+  human1 = seurat1human,
+  rhesus1 = seurat1mmul,
+  human2 = seurat2human,
+  rhesus2 = seurat2mmul
+)
+
+for(i in 1:length(seuratlist)) {
+  temp <- SplitObject(seuratlist[[i]], split.by = "sample")
+  for(j in 1:length(temp)) {
+    temp2 <- median(temp[[j]]$nCount_RNA)
+    temp3 <- (3*mad(temp[[j]]$nCount_RNA))
+    tempup <- temp2 + temp3
+    templow <- temp2 - temp3
+    temp4 <- median(temp[[j]]$nFeature_RNA)
+    temp5 <- (3*mad(temp[[j]]$nFeature_RNA))
+    tempup2 <- temp4 + temp5
+    templow2 <- temp4 - temp5
+    temp[[j]] <- subset(temp[[j]], subset = nCount_RNA > templow & nCount_RNA < tempup & nFeature_RNA > templow2 & nFeature_RNA < tempup2 & mtpct < 0.10)
+  }
+  seuratlist[[i]] <- Seurat:::merge.SCTAssay(temp, merge.data = F)
+}
+
+temp <- t(c(table(seuratlist[[1]]$sample),table(seuratlist[[2]]$sample)))
+write.table(temp, file = paste(workdirrna,"after_qc_cells1.txt",sep="/"), append = FALSE, quote = TRUE, sep = "\t", eol = "\n", na = "NA", dec = ".", row.names = F, col.names = T)
+
+temp <- t(c(table(seuratlist[[3]]$sample),table(seuratlist[[4]]$sample)))
+write.table(temp, file = paste(workdirrna,"after_qc_cells2.txt",sep="/"), append = FALSE, quote = TRUE, sep = "\t", eol = "\n", na = "NA", dec = ".", row.names = F, col.names = T)
+```
+
+```{r}
+stained_cells1 = colnames(seuratfilt1[["RNA"]]$`counts.Gene Expression`)
+background1 = setdiff(colnames(seuratraw1[["RNA"]]$`counts.Gene Expression`), stained_cells1)
+
+stained_cells2 = colnames(seuratfilt2[["RNA"]]$`counts.Gene Expression`)
+background2 = setdiff(colnames(seuratraw2[["RNA"]]$`counts.Gene Expression`), stained_cells2)
+
+rna1 <- seuratraw1[["RNA"]]$`counts.Gene Expression`
+rna2 <- seuratraw2[["RNA"]]$`counts.Gene Expression`
+
+prot1 <- seuratraw1[["RNA"]]$`counts.Antibody Capture`[ADT1,]
+prot2 <- seuratraw2[["RNA"]]$`counts.Antibody Capture`[ADT2,]
+
+
+#rbgene1 = grep(pattern = "-RP[S|L]", rownames(rna1), value = TRUE)
+#rbgene2 = grep(pattern = "-RP[S|L]", rownames(rna2), value = TRUE)
+
+md1 = data.frame(
+  rna.size = log10(Matrix::colSums(rna1)), 
+  prot.size = log10(Matrix::colSums(prot1)), 
+  n.gene = Matrix::colSums(rna1 > 0)
+)
+
+md2 = data.frame(
+  rna.size = log10(Matrix::colSums(rna2)), 
+  prot.size = log10(Matrix::colSums(prot2)), 
+  n.gene = Matrix::colSums(rna2 > 0)
+)
+
+md1$drop.class = ifelse(rownames(md1) %in% stained_cells1, 'cell', 'background')
+md2$drop.class = ifelse(rownames(md2) %in% stained_cells2, 'cell', 'background')
+
+md1 = md1[md1$rna.size > 0 & md1$prot.size > 0, ]
+md2 = md2[md2$rna.size > 0 & md2$prot.size > 0, ]
+
+p1<-ggplot(md1, aes(x = log10(n.gene), y = prot.size )) +
+   theme_bw() + 
+   geom_bin2d(bins = 300) + 
+   scale_fill_viridis_c(option = "C") + 
+   facet_wrap(~drop.class)
+ggsave(filename="BackgroundScreen1.png",plot=p1,device="png",dpi=600,path=workdiradt)
+
+p2<-ggplot(md2, aes(x = log10(n.gene), y = prot.size )) +
+   theme_bw() + 
+   geom_bin2d(bins = 300) + 
+   scale_fill_viridis_c(option = "C") + 
+   facet_wrap(~drop.class)
+ggsave(filename="BackgroundScreen2.png",plot=p2,device="png",dpi=600,path=workdiradt)
+```
+
+```{r}
+background_drops1 = rownames(
+  md1[ md1$prot.size > 1 & 
+      md1$prot.size < 4.5 & 
+      md1$rna.size < 2.5, ]
+  ) 
+background.adt.mtx1 = as.matrix(prot1[ , background_drops1])
+
+background_drops2 = rownames(
+  md2[ md2$prot.size > 1 & 
+      md2$prot.size < 4 & 
+      md2$rna.size < 2.5, ]
+  ) 
+background.adt.mtx2 = as.matrix(prot2[ , background_drops2])
+
+control1 <- grep(pattern = "Isotype", ADT1, value = T)
+control2 <- grep(pattern = "Isotype", ADT2, value = T)
+
+cells.dsb.norm = DSBNormalizeProtein(
+  cell_protein_matrix = as.matrix(seuratlist[["human1"]]@assays[["ADT"]]@counts), 
+  empty_drop_matrix = background.adt.mtx1, 
+  denoise.counts = TRUE, 
+  use.isotype.control = TRUE, 
+  isotype.control.name.vec = control1,
+  quantile.clipping = TRUE,
+  quantile.clip = c(0.01, 0.99)
+)
+seuratlist[["human1"]][["ADT"]]$data = cells.dsb.norm
+
+cells.dsb.norm = DSBNormalizeProtein(
+  cell_protein_matrix = as.matrix(seuratlist[["rhesus1"]]@assays[["ADT"]]@counts), 
+  empty_drop_matrix = background.adt.mtx1, 
+  denoise.counts = TRUE, 
+  use.isotype.control = TRUE, 
+  isotype.control.name.vec = control1,
+  quantile.clipping = TRUE,
+  quantile.clip = c(0.01, 0.99)
+)
+seuratlist[["rhesus1"]][["ADT"]]$data = cells.dsb.norm
+
+cells.dsb.norm = DSBNormalizeProtein(
+  cell_protein_matrix = as.matrix(seuratlist[["human2"]]@assays[["ADT"]]@counts), 
+  empty_drop_matrix = background.adt.mtx2, 
+  denoise.counts = TRUE, 
+  use.isotype.control = TRUE, 
+  isotype.control.name.vec = control2,
+  quantile.clipping = TRUE,
+  quantile.clip = c(0.01, 0.99)
+)
+seuratlist[["human2"]][["ADT"]]$data = cells.dsb.norm
+
+cells.dsb.norm = DSBNormalizeProtein(
+  cell_protein_matrix = as.matrix(seuratlist[["rhesus2"]]@assays[["ADT"]]@counts), 
+  empty_drop_matrix = background.adt.mtx2, 
+  denoise.counts = TRUE, 
+  use.isotype.control = TRUE, 
+  isotype.control.name.vec = control2,
+  quantile.clipping = TRUE,
+  quantile.clip = c(0.01, 0.99)
+)
+seuratlist[["rhesus2"]][["ADT"]]$data = cells.dsb.norm
+```
+
+```{r}
+test <- as.data.frame(Matrix::colMeans(seuratlist[["human1"]][["ADT"]]$counts))
+test$sample <- seuratlist[["human1"]]$sample
+colnames(test) <- c("Mean Expression", "Sample")
+p1 <- test %>% mutate(Sample = forcats::fct_relevel(Sample, humansampleorder)) %>% ggplot(aes(x=Sample, y=`Mean Expression`)) + geom_violin(aes(fill=Sample), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank()) + scale_y_continuous(limits=c(0,100))
+
+test <- as.data.frame(Matrix::colMeans(seuratlist[["human2"]][["ADT"]]$counts))
+test$sample <- seuratlist[["human2"]]$sample
+colnames(test) <- c("Mean Expression", "Sample")
+p2 <- test %>% mutate(Sample = forcats::fct_relevel(Sample, humansampleorder)) %>% ggplot(aes(x=Sample, y=`Mean Expression`)) + geom_violin(aes(fill=Sample), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank()) + scale_y_continuous(limits=c(0,100))
+
+test <- as.data.frame(Matrix::colMeans(seuratlist[["rhesus1"]][["ADT"]]$counts))
+test$sample <- seuratlist[["rhesus1"]]$sample
+colnames(test) <- c("Mean Expression", "Sample")
+p3 <- test %>% mutate(Sample = forcats::fct_relevel(Sample, rhesussampleorder)) %>% ggplot(aes(x=Sample, y=`Mean Expression`)) + geom_violin(aes(fill=Sample), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank()) + scale_y_continuous(limits=c(0,100))
+
+test <- as.data.frame(Matrix::colMeans(seuratlist[["rhesus2"]][["ADT"]]$counts))
+test$sample <- seuratlist[["rhesus2"]]$sample
+colnames(test) <- c("Mean Expression", "Sample")
+p4 <- test %>% mutate(Sample = forcats::fct_relevel(Sample, rhesussampleorder)) %>% ggplot(aes(x=Sample, y=`Mean Expression`)) + geom_violin(aes(fill=Sample), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank()) + scale_y_continuous(limits=c(0,100))
+
+ggsave(filename="human1_rawADTexpression.png",plot=p1,device="png",dpi=600,path=workdiradt)
+ggsave(filename="human2_rawADTexpression.png",plot=p2,device="png",dpi=600,path=workdiradt)
+ggsave(filename="rhesus1_rawADTexpression.png",plot=p3,device="png",dpi=600,path=workdiradt)
+ggsave(filename="rhesus2_rawADTexpression.png",plot=p4,device="png",dpi=600,path=workdiradt)
+
+test <- as.data.frame(Matrix::colMeans(seuratlist[["human1"]][["ADT"]]$data))
+test$sample <- seuratlist[["human1"]]$sample
+colnames(test) <- c("Mean Expression", "Sample")
+p1 <- test %>% mutate(Sample = forcats::fct_relevel(Sample, humansampleorder)) %>% ggplot(aes(x=Sample, y=`Mean Expression`)) + geom_violin(aes(fill=Sample), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank()) + scale_y_continuous(limits=c(0,5))
+
+test <- as.data.frame(Matrix::colMeans(seuratlist[["human2"]][["ADT"]]$data))
+test$sample <- seuratlist[["human2"]]$sample
+colnames(test) <- c("Mean Expression", "Sample")
+p2 <- test %>% mutate(Sample = forcats::fct_relevel(Sample, humansampleorder)) %>% ggplot(aes(x=Sample, y=`Mean Expression`)) + geom_violin(aes(fill=Sample), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank()) + scale_y_continuous(limits=c(0,5))
+
+test <- as.data.frame(Matrix::colMeans(seuratlist[["rhesus1"]][["ADT"]]$data))
+test$sample <- seuratlist[["rhesus1"]]$sample
+colnames(test) <- c("Mean Expression", "Sample")
+p3 <- test %>% mutate(Sample = forcats::fct_relevel(Sample, rhesussampleorder)) %>% ggplot(aes(x=Sample, y=`Mean Expression`)) + geom_violin(aes(fill=Sample), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank()) + scale_y_continuous(limits=c(0,5))
+
+test <- as.data.frame(Matrix::colMeans(seuratlist[["rhesus2"]][["ADT"]]$data))
+test$sample <- seuratlist[["rhesus2"]]$sample
+colnames(test) <- c("Mean Expression", "Sample")
+p4 <- test %>% mutate(Sample = forcats::fct_relevel(Sample, rhesussampleorder)) %>% ggplot(aes(x=Sample, y=`Mean Expression`)) + geom_violin(aes(fill=Sample), scale = "width") + geom_boxplot(width=0.1, outlier.size=0) + theme_bw() + theme(axis.text.x=element_blank()) + scale_y_continuous(limits=c(0,5))
+
+ggsave(filename="human1_dsbADTexpression.png",plot=p1,device="png",dpi=600,path=workdiradt,height=7,width=7)
+ggsave(filename="human2_dsbADTexpression.png",plot=p2,device="png",dpi=600,path=workdiradt,height=7,width=7)
+ggsave(filename="rhesus1_dsbADTexpression.png",plot=p3,device="png",dpi=600,path=workdiradt,height=7,width=7)
+ggsave(filename="rhesus2_dsbADTexpression.png",plot=p4,device="png",dpi=600,path=workdiradt,height=7,width=7)
+```
+
+```{r}
+PROT = grep(pattern = "^Isotype-", rownames(seuratfilt1[["ADT"]]), value = TRUE, invert = TRUE)
+
+PROTCRcheck <- readRDS("Antibody Cross Reactivity")
+rownames(PROTCRcheck) <- PROTCRcheck[,1]
+PROT2 <- PROTCRcheck$Antibody[PROTCRcheck$`Cross-Reactive`]
+
+tempseurat <- Seurat:::merge.SCTAssay(seuratlist[[1]], seuratlist[[2]], merge.data = T)
+tempseurat$speciestime <- paste(tempseurat$species, tempseurat$time, sep = "_")
+
+DefaultAssay(tempseurat) <- "ADT"
+
+tempseurat2 <- Seurat:::merge.SCTAssay(seuratlist[[3]], seuratlist[[4]], merge.data = T)
+tempseurat2$speciestime <- paste(tempseurat2$species, tempseurat2$time, sep = "_")
+
+DefaultAssay(tempseurat2) <- "ADT"
+
+Idents(tempseurat) <- "species"
+for(i in 1:floor(length(PROT)/6)){
+  k <- i*6
+  if(k<length(PROT)) {
+    p<-VlnPlot(tempseurat, assay = "ADT", features = PROT[(k-5):k], pt.size = 0, idents = c("Human","Rhesus Macaque"), layer = "data")
+    for(j in (k-5):k){
+      yline1 <- mean(seuratlist[["human1"]]@assays[["ADT"]]@data[PROT[j],])
+      yline2 <- mean(seuratlist[["rhesus1"]]@assays[["ADT"]]@data[PROT[j],])
+      p[[(j+6-k)]] <- p[[(j+6-k)]] + geom_hline(yintercept = yline1, colour = "#F8766D", alpha = 0.75) + geom_hline(yintercept = yline2, colour = "#00BFC4", alpha = 0.75) + theme(axis.title.x=element_blank())
+    }
+    ggsave(filename=paste("ADT_",(k-5),"~",k,".png",sep=""),plot=p,device="png",dpi=600,path=paste(workdiradt,"ADT_Binding_Comparisons/Well 1",sep="/"),height=7,width=7)
+  }
+  if(i==floor(length(PROT)/6)) {
+    if(((length(PROT))%%i)>0){
+      k <- (i+1)*6
+      p<-VlnPlot(tempseurat, assay = "ADT", features = PROT[(k-5):length(PROT)], pt.size = 0, idents = c("Human","Rhesus Macaque"), layer = "data")
+      for(j in (k-5):length(PROT)){
+      yline1 <- mean(seuratlist[["human1"]]@assays[["ADT"]]@data[PROT[j],])
+      yline2 <- mean(seuratlist[["rhesus1"]]@assays[["ADT"]]@data[PROT[j],])
+      p[[(j+6-k)]] <- p[[(j+6-k)]] + geom_hline(yintercept = yline1, colour = "#F8766D", alpha = 0.75) + geom_hline(yintercept = yline2, colour = "#00BFC4", alpha = 0.75) + theme(axis.title.x=element_blank())
+      }
+      ggsave(filename=paste("ADT_",(k-5),"~",length(PROT),".png",sep=""),plot=p,device="png",dpi=600,path=paste(workdiradt,"ADT_Binding_Comparisons/Well 1",sep="/"),height=7,width=7)
+    }
+    break
+  }
+}
+
+Idents(tempseurat2) <- "species"
+for(i in 1:floor(length(PROT)/6)){
+  k <- i*6
+  if(k<length(PROT)) {
+    p<-VlnPlot(tempseurat2, assay = "ADT", features = PROT[(k-5):k], pt.size = 0, idents = c("Human","Rhesus Macaque"), layer = "data")
+    for(j in (k-5):k){
+      yline1 <- mean(seuratlist[["human2"]]@assays[["ADT"]]@data[PROT[j],])
+      yline2 <- mean(seuratlist[["rhesus2"]]@assays[["ADT"]]@data[PROT[j],])
+      p[[(j+6-k)]] <- p[[(j+6-k)]] + geom_hline(yintercept = yline1, colour = "#F8766D", alpha = 0.75) + geom_hline(yintercept = yline2, colour = "#00BFC4", alpha = 0.75) + theme(axis.title.x=element_blank())
+    }
+    ggsave(filename=paste("ADT_",(k-5),"~",k,".png",sep=""),plot=p,device="png",dpi=600,path=paste(workdiradt,"ADT_Binding_Comparisons/Well 2",sep="/"),height=7,width=7)
+  }
+  if(i==floor(length(PROT)/6)) {
+    if(((length(PROT))%%i)>0){
+      k <- (i+1)*6
+      p<-VlnPlot(tempseurat2, assay = "ADT", features = PROT[(k-5):length(PROT)], pt.size = 0, idents = c("Human","Rhesus Macaque"), layer = "data")
+      for(j in (k-5):length(PROT)){
+      yline1 <- mean(seuratlist[["human2"]]@assays[["ADT"]]@data[PROT[j],])
+      yline2 <- mean(seuratlist[["rhesus2"]]@assays[["ADT"]]@data[PROT[j],])
+      p[[(j+6-k)]] <- p[[(j+6-k)]] + geom_hline(yintercept = yline1, colour = "#F8766D", alpha = 0.75) + geom_hline(yintercept = yline2, colour = "#00BFC4", alpha = 0.75) + theme(axis.title.x=element_blank())
+      }
+      ggsave(filename=paste("ADT_",(k-5),"~",length(PROT),".png",sep=""),plot=p,device="png",dpi=600,path=paste(workdiradt,"ADT_Binding_Comparisons/Well 2",sep="/"),height=7,width=7)
+    }
+    break
+  }
+}
+
+vlnplotcols <- c("#8EE5EE","#7AC5CD","#53868B","#436EEE", "#3A5FCD","#27408B","#FF8247","#CD6839","#00EE76","#00CD66","#008B45","#EE9A49","#CD853F","#8B5A2B")
+
+Idents(tempseurat) <- "sample"
+for(i in 1:length(PROT)){
+  p <- VlnPlot(tempseurat, assay = "ADT", features = PROT[i], pt.size = 0, layer = "data", cols = vlnplotcols) + NoLegend()
+  p[[1]][["data"]][["ident"]] <- forcats::fct_relevel(p$data$ident, c("Hu-D1-W0", "Hu-D1-W8", "Hu-D1-W22", "Hu-D2-W0", "Hu-D2-W8", "Hu-D2-W22", "Rh-D1-W8", "Rh-D1-W22", "Rh-D2-W0", "Rh-D2-W8", "Rh-D2-W22", "Rh-D3-W0", "Rh-D3-W8", "Rh-D3-W22"))
+  yline1 <- mean(seuratlist[["human1"]]@assays[["ADT"]]@data[PROT[i],])
+  yline2 <- mean(seuratlist[["rhesus1"]]@assays[["ADT"]]@data[PROT[i],])
+  p[[1]] <- p[[1]] + geom_hline(yintercept = yline1, colour = "#8EE5EE") + geom_hline(yintercept = yline2, colour = "#8B5A2B") + theme(axis.title.x=element_blank())
+  ggsave(filename=paste(PROT[i],".png",sep=""),plot=p,device="png",dpi=600,path=paste(workdiradt,"ADT_Binding_Comparisons/Well 1 by sample",sep="/"),height=5,width=10)
+}
+
+Idents(tempseurat2) <- "sample"
+for(i in 1:length(PROT)){
+  p <- VlnPlot(tempseurat2, assay = "ADT", features = PROT[i], pt.size = 0, layer = "data", cols = vlnplotcols) + NoLegend()
+  p[[1]][["data"]][["ident"]] <- forcats::fct_relevel(p$data$ident, c("Hu-D1-W0", "Hu-D1-W8", "Hu-D1-W22", "Hu-D2-W0", "Hu-D2-W8", "Hu-D2-W22", "Rh-D1-W8", "Rh-D1-W22", "Rh-D2-W0", "Rh-D2-W8", "Rh-D2-W22", "Rh-D3-W0", "Rh-D3-W8", "Rh-D3-W22"))
+  yline1 <- mean(seuratlist[["human2"]]@assays[["ADT"]]@data[PROT[i],])
+  yline2 <- mean(seuratlist[["rhesus2"]]@assays[["ADT"]]@data[PROT[i],])
+  p[[1]] <- p[[1]] + geom_hline(yintercept = yline1, colour = "#8EE5EE") + geom_hline(yintercept = yline2, colour = "#8B5A2B") + theme(axis.title.x=element_blank())
+  ggsave(filename=paste(PROT[i],".png",sep=""),plot=p,device="png",dpi=600,path=paste(workdiradt,"ADT_Binding_Comparisons/Well 2 by sample",sep="/"),height=5,width=10)
+}
+
+DefaultAssay(tempseurat) <- "RNA"
+DefaultAssay(tempseurat2) <- "RNA"
+```
+
+```{r}
+seurat1human <- NULL
+seurat1mmul <- NULL
+seurat2human <- NULL
+seurat2mmul <- NULL
+gc()
+seuratlist[[1]]$well <- "well 1"
+seuratlist[[2]]$well <- "well 1"
+seuratlist[[3]]$well <- "well 2"
+seuratlist[[4]]$well <- "well 2"
+seurathuman <- Seurat:::merge.SCTAssay(seuratlist[[1]], seuratlist[[3]], merge.data = T)
+seuratrhesus <- Seurat:::merge.SCTAssay(seuratlist[[2]], seuratlist[[4]], merge.data = T)
+
+DefaultAssay(seurathuman) <- "RNA"
+seurathuman <- NormalizeData(seurathuman, verbose = FALSE)
+seurathuman <- FindVariableFeatures(seurathuman,  nfeatures = 4000, verbose = FALSE)
+seurathuman <- ScaleData(seurathuman, verbose = FALSE)
+seurathuman <- RunPCA(seurathuman, features = VariableFeatures(object = seurathuman), verbose = FALSE)
+seurathuman <- RunUMAP(object = seurathuman, features = VariableFeatures(object = seurathuman), reduction = "pca", min.dist = 0.2, n.neighbors = 30, verbose = FALSE)
+
+DefaultAssay(seuratrhesus) <- "RNA"
+seuratrhesus <- NormalizeData(seuratrhesus, verbose = FALSE)
+seuratrhesus <- FindVariableFeatures(seuratrhesus,  nfeatures = 4000, verbose = FALSE)
+seuratrhesus <- ScaleData(seuratrhesus, verbose = FALSE)
+seuratrhesus <- RunPCA(seuratrhesus, features = VariableFeatures(object = seuratrhesus), verbose = FALSE)
+seuratrhesus <- RunUMAP(object = seuratrhesus, features = VariableFeatures(object = seuratrhesus), reduction = "pca", min.dist = 0.2, n.neighbors = 30, verbose = FALSE)
+
+p<-DimPlot(object = seurathuman, reduction = "umap", group.by = "well")
+ggsave(filename="BeforeIntegrationHumanRNA.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+p<-DimPlot(object = seuratrhesus, reduction = "umap", group.by = "well")
+ggsave(filename="BeforeIntegrationRhesusRNA.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+
+seurathuman <- RunHarmony(seurathuman, group.by.vars = "well")
+seuratrhesus <- RunHarmony(seuratrhesus, group.by.vars = "well")
+
+seurathuman <- RunUMAP(object = seurathuman, features = VariableFeatures(object = seurathuman), reduction = "harmony", min.dist = 0.2, n.neighbors = 30, verbose = FALSE)
+seuratrhesus <- RunUMAP(object = seuratrhesus, features = VariableFeatures(object = seuratrhesus), reduction = "harmony", min.dist = 0.2, n.neighbors = 30, verbose = FALSE)
+
+p<-DimPlot(object = seurathuman, reduction = "harmony", group.by = "well")
+ggsave(filename="AfterIntegrationHumanRNA.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+p<-DimPlot(object = seuratrhesus, reduction = "harmony", group.by = "well")
+ggsave(filename="AfterIntegrationRhesusRNA.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+
+DefaultAssay(seurathuman) <- "ADT"
+VariableFeatures(seurathuman) = PROT
+seurathuman <- FindNeighbors(object = seurathuman, dims = NULL, features = PROT, k.param = 30, verbose = FALSE)
+seurathuman <- FindClusters(object = seurathuman, resolution = 1, algorithm = 3, graph.name = 'ADT_snn', verbose = FALSE)
+seurathuman <- ScaleData(seurathuman, verbose = FALSE)
+seurathuman <- RunPCA(seurathuman, reduction.name = 'pcaa', verbose = FALSE)
+seurathuman <- RunUMAP(object = seurathuman, features = PROT, min.dist = 0.2, n.neighbors = 30, verbose = FALSE)
+
+DefaultAssay(seuratrhesus) <- "ADT"
+VariableFeatures(seuratrhesus) = PROT2
+seuratrhesus <- FindNeighbors(object = seuratrhesus, dims = NULL, features = PROT2, k.param = 30, verbose = FALSE)
+seuratrhesus <- FindClusters(object = seuratrhesus, resolution = 1, algorithm = 3, graph.name = 'ADT_snn', verbose = FALSE)
+seuratrhesus <- ScaleData(seuratrhesus, verbose = FALSE)
+seuratrhesus <- RunPCA(seuratrhesus, reduction.name = 'pcaa', verbose = FALSE)
+seuratrhesus <- RunUMAP(object = seuratrhesus, features = PROT2, min.dist = 0.2, n.neighbors = 30, verbose = FALSE)
+
+citeseqhuman <- seurathuman@assays$ADT@scale.data %>% t() %>% as_tibble()
+citeseqhuman <- citeseqhuman %>% mutate("batch" = seurathuman$well, "sample" = seurathuman$sample, "label" = as.numeric(as.character(seurathuman$ADT_snn_res.1)))
+colnames(citeseqhuman) <- gsub("-","_",colnames(citeseqhuman))
+
+detect_batch_effect(citeseqhuman, batch_col = "batch", label_col = "label", out_dir = paste(workdiradt, "CyCombine/Human", sep="/"))
+
+citeseqrhesus <- seuratrhesus@assays$ADT@scale.data %>% t() %>% as_tibble()
+citeseqrhesus <- citeseqrhesus %>% mutate("batch" = seuratrhesus$well, "sample" = seuratrhesus$sample, "label" = as.numeric(as.character(seuratrhesus$ADT_snn_res.1)))
+colnames(citeseqrhesus) <- gsub("-","_",colnames(citeseqrhesus))
+
+detect_batch_effect(citeseqrhesus, batch_col = "batch", label_col = "label", out_dir = paste(workdiradt, "CyCombine/Rhesus", sep="/"))
+
+citeseqhumancorr <- batch_correct(citeseqhuman, label = "label")
+
+p1 <- plot_dimred(citeseqhuman, "Uncorrected", type = "umap", plot = "batch")
+p2 <- plot_dimred(citeseqhumancorr, "Corrected", type = "umap", plot = "batch")
+
+ggsave(filename="BeforeIntegrationHumanADT.png",plot=p1,device="png",dpi=600,path=workdiradt,height=7,width=7)
+ggsave(filename="AfterIntegrationHumanADT.png",plot=p2,device="png",dpi=600,path=workdiradt,height=7,width=7)
+
+citeseqrhesuscorr <- batch_correct(citeseqrhesus, label = "label")
+
+p1 <- plot_dimred(citeseqrhesus, "Uncorrected", type = "umap", plot = "batch")
+p2 <- plot_dimred(citeseqrhesuscorr, "Corrected", type = "umap", plot = "batch")
+
+ggsave(filename="BeforeIntegrationRhesusADT.png",plot=p1,device="png",dpi=600,path=workdiradt,height=7,width=7)
+ggsave(filename="AfterIntegrationRhesusADT.png",plot=p2,device="png",dpi=600,path=workdiradt,height=7,width=7)
+
+temp<- t(citeseqhumancorr[,3:132])
+colnames(temp) <- colnames(seurathuman@assays$ADT@scale.data)
+rownames(temp) <- gsub("_","-",rownames(temp))
+seurathuman@assays$ADT@scale.data <- temp
+seurathuman <- RunPCA(seurathuman, reduction.name = 'pcaa', verbose = FALSE)
+
+temp<- t(citeseqrhesuscorr[,3:53])
+colnames(temp) <- colnames(seuratrhesus@assays$ADT@scale.data)
+rownames(temp) <- gsub("_","-",rownames(temp))
+seuratrhesus@assays$ADT@scale.data <- temp
+seuratrhesus <- RunPCA(seuratrhesus, reduction.name = 'pcaa', verbose = FALSE)
+```
+
+```{r}
+seurathuman$mtpct <- seurathuman$mtpct*100
+seurathuman <- ScaleData(seurathuman, features = rownames(seurathuman[["QC"]]), assay = "QC",verbose = FALSE)
+seurathuman <- RunPCA(seurathuman, assay = "QC", features = rownames(seurathuman[["QC"]]), reduction.name = "qpca")
+p<-FeaturePlot(seurathuman, features = c("nFeature_RNA","nCount_RNA","mtpct","percent_ribo","log10GenesPerUMI"), reduction = "qpca")
+ggsave(filename="QCPCAHuman_QC.png",plot=p,device="png",dpi=600,path=workdirrna,height=12,width=12)
+seurathuman <- FindNeighbors(seurathuman, reduction = "qpca", dims = 1:4, verbose = FALSE)
+seurathuman <- FindClusters(seurathuman, graph.name = "QC_nn", resolution = 0.5, verbose = FALSE)
+seurathuman <- RunUMAP(seurathuman, reduction = "qpca", dims = 1:4, reduction.name = "qumap", verbose = FALSE)
+p<-FeaturePlot(seurathuman, features = c("nFeature_RNA","nCount_RNA","mtpct","percent_ribo","log10GenesPerUMI"), reduction = "qumap")
+ggsave(filename="QUMAPHuman_QC.png",plot=p,device="png",dpi=600,path=workdirrna,height=12,width=12)
+
+seuratrhesus$mtpct <- seuratrhesus$mtpct*100
+seuratrhesus <- ScaleData(seuratrhesus, features = rownames(seuratrhesus[["QC"]]), assay = "QC",verbose = FALSE)
+seuratrhesus <- RunPCA(seuratrhesus, assay = "QC", features = rownames(seuratrhesus[["QC"]]), reduction.name = "qpca")
+p<-FeaturePlot(seuratrhesus, features = c("nFeature_RNA","nCount_RNA","mtpct","percent_ribo","log10GenesPerUMI"), reduction = "qpca")
+ggsave(filename="QCPCARhesus_QC.png",plot=p,device="png",dpi=600,path=workdirrna,height=12,width=12)
+seuratrhesus <- FindNeighbors(seuratrhesus, reduction = "qpca", dims = 1:4, verbose = FALSE)
+seuratrhesus <- FindClusters(seuratrhesus, graph.name = "QC_nn", resolution = 0.5, verbose = FALSE)
+seuratrhesus <- RunUMAP(seuratrhesus, reduction = "qpca", dims = 1:4, reduction.name = "qumap", verbose = FALSE)
+p<-FeaturePlot(seuratrhesus, features = c("nFeature_RNA","nCount_RNA","mtpct","percent_ribo","log10GenesPerUMI"), reduction = "qumap")
+ggsave(filename="QUMAPRhesus_QC.png",plot=p,device="png",dpi=600,path=workdirrna,height=12,width=12)
+```
+
+```{r}
+#Human
+seurathuman <- FindMultiModalNeighbors(seurathuman, reduction.list = list("harmony", "pcaa"), dims.list = list(1:30, 1:18), verbose = FALSE)
+seurathuman <- RunUMAP(seurathuman, nn.name = "weighted.nn", reduction.name = "wnn.umap", reduction.key = "wnnUMAP_", verbose = FALSE)
+#seurathuman <- FindClusters(seurathuman, graph.name = "wsnn", algorithm = 3, resolution = 0.2, verbose = FALSE)
+#seurathuman <- FindClusters(seurathuman, graph.name = "wsnn", algorithm = 3, resolution = 0.4, verbose = FALSE)
+#seurathuman <- FindClusters(seurathuman, graph.name = "wsnn", algorithm = 3, resolution = 0.6, verbose = FALSE)
+#seurathuman <- FindClusters(seurathuman, graph.name = "wsnn", algorithm = 3, resolution = 0.8, verbose = FALSE)
+seurathuman <- FindClusters(seurathuman, graph.name = "wsnn", algorithm = 3, resolution = 1, verbose = FALSE)
+#seurathuman <- FindClusters(seurathuman, graph.name = "wsnn", algorithm = 3, resolution = 2, verbose = FALSE)
+
+Idents(seurathuman) <- "wsnn_res.1"
+p <- DimPlot(seurathuman, reduction = 'wnn.umap', label = TRUE, repel = TRUE, label.size = 2.5) + NoLegend()
+ggsave(filename="UMAP_RNA_ADT_human.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+p<-FeaturePlot(seurathuman, features = c("nFeature_RNA","nCount_RNA","mtpct","percent_ribo","log10GenesPerUMI"), reduction = "wnn.umap")
+ggsave(filename="QUMAP_RNA_ADT_human_QC.png",plot=p,device="png",dpi=600,path=workdirrna,height=12,width=12)
+
+#DefaultAssay(seurathuman) <- "RNA"
+#seurathuman <- FindNeighbors(seurathuman, reduction = "harmony", verbose = FALSE)
+#seurathuman <- RunUMAP(seurathuman, dims = 1:10, verbose = FALSE)
+#seurathuman <- FindClusters(seurathuman, graph.name = "RNA_snn", resolution = 1, verbose = FALSE)
+
+#Idents(seurathuman) <- "RNA_snn_res.1"
+#p <- DimPlot(seurathuman, reduction = 'umap', label = TRUE, repel = TRUE, label.size = 2.5) + NoLegend()
+#ggsave(filename="UMAP_RNA_human.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+
+#Rhesus
+seuratrhesus <- FindMultiModalNeighbors(seuratrhesus, reduction.list = list("harmony", "pcaa"), dims.list = list(1:30, 1:18), verbose = FALSE)
+seuratrhesus <- RunUMAP(seuratrhesus, nn.name = "weighted.nn", reduction.name = "wnn.umap", reduction.key = "wnnUMAP_", verbose = FALSE)
+#seuratrhesus <- FindClusters(seuratrhesus, graph.name = "wsnn", algorithm = 3, resolution = 0.2, verbose = FALSE)
+#seuratrhesus <- FindClusters(seuratrhesus, graph.name = "wsnn", algorithm = 3, resolution = 0.4, verbose = FALSE)
+#seuratrhesus <- FindClusters(seuratrhesus, graph.name = "wsnn", algorithm = 3, resolution = 0.6, verbose = FALSE)
+#seuratrhesus <- FindClusters(seuratrhesus, graph.name = "wsnn", algorithm = 3, resolution = 0.8, verbose = FALSE)
+seuratrhesus <- FindClusters(seuratrhesus, graph.name = "wsnn", algorithm = 3, resolution = 1, verbose = FALSE)
+#seuratrhesus <- FindClusters(seuratrhesus, graph.name = "wsnn", algorithm = 3, resolution = 2, verbose = FALSE)
+
+Idents(seuratrhesus) <- "wsnn_res.1"
+p <- DimPlot(seuratrhesus, reduction = 'wnn.umap', label = TRUE, repel = TRUE, label.size = 2.5) + NoLegend()
+ggsave(filename="UMAP_RNA_ADT_rhesus.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+
+#DefaultAssay(seuratrhesus) <- "RNA"
+#seuratrhesus <- FindNeighbors(seuratrhesus, reduction = "harmony", verbose = FALSE)
+#seuratrhesus <- RunUMAP(seuratrhesus, dims = 1:10, verbose = FALSE)
+#seuratrhesus <- FindClusters(seuratrhesus, graph.name = "RNA_snn", resolution = 1, verbose = FALSE)
+
+#Idents(seuratrhesus) <- "RNA_snn_res.1"
+#p <- DimPlot(seuratrhesus, reduction = 'umap', label = TRUE, repel = TRUE, label.size = 2.5) + NoLegend()
+#ggsave(filename="UMAP_RNA_rhesus.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+p<-FeaturePlot(seuratrhesus, features = c("nFeature_RNA","nCount_RNA","mtpct","percent_ribo","log10GenesPerUMI"), reduction = "wnn.umap")
+ggsave(filename="QUMAP_RNA_ADT_rhesus_QC.png",plot=p,device="png",dpi=600,path=workdirrna,height=12,width=12)
+
+#p <- clustree(seurathuman, prefix = "wsnn_res.", assay = "RNA")
+#ggsave(filename="Human_clustree.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+#p <- clustree(seuratrhesus, prefix = "wsnn_res.", assay = "RNA")
+#ggsave(filename="Rhesus_clustree.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+```
+
+```{r}
+#Run Annotation here
+```
+
+```{r}
+#CrossSpecies
+temp <- as.data.frame(MatrixGenerics::rowMedians(seurathuman@assays[["ADT"]]@scale.data))
+temp2 <- as.data.frame(MatrixGenerics::rowMedians(seuratrhesus@assays[["ADT"]]@scale.data))
+temp3 <- temp - temp2
+colnames(temp3) <- "Median ADT Expression"
+temp3$protein <- rownames(temp3)
+temp3 <- sort_by(temp3, temp3$`Median ADT Expression`, decreasing = T)
+p<-ggplot(data=temp3, aes(x=protein, y=`Median ADT Expression`)) +
+  geom_bar(stat="identity", orientation = "x") + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+p[["data"]][["protein"]] <- forcats::fct_relevel(p[["data"]][["protein"]], temp3$protein)
+ggsave(filename="CrossSpecies_ADT_Expression.png",plot=p,device="png",dpi=600,path=workdiradt,height=15,width=15)
+```
+
+```{r}
+celldexref <- readRDS("schisto cite-seq/MonacoImmuneDataEnsembl")
+#celldexref <- MonacoImmuneData(ensembl=TRUE)
+#saveRDS(celldexref, file = "schisto cite-seq/MonacoImmuneDataEnsembl")
+
+temp <- GetAssayData(seurathuman, assay = "RNA")
+cellclass <- SingleR(temp,celldexref,labels=colnames(celldexref), clusters=seurathuman$wsnn_res.1)
+seurathuman$SingleRAnnotation <- cellclass$labels[match(seurathuman$wsnn_res.1, rownames(cellclass))]
+Idents(seurathuman) <- "SingleRAnnotation"
+seurathuman <- RenameIdents(seurathuman, "DZQV_CD8_TE" = "CD8 T eff", "9JD4_CD8_CM" = "CD8 Tcmem", "DZQV_mDC" = "mDC", "DZQV_B_SM" = "B smem", "925L_Treg" = "Treg", "G4YW_B_naive" = "B naive", "9JD4_CD8_TE" = "CD8 Teff2", "G4YW_pDC" = "pDC", "9JD4_CD8_EM" = "CD8 T em", "9JD4_Treg" = "Treg2", "9JD4_NK" = "NK", "9JD4_VD2+" = "Vd2+ T", "G4YW_B_NSM" = "B nmem", "G4YW_Th1" = "Th1", "G4YW_MAIT" = "MAIT", "G4YW_VD2+" = "Vd2+ T", "9JD4_C_mono" = "C mono", "G4YW_I_mono" = "intermono", "G4YW_NC_mono" = "NC mono", "G4YW_Treg" = "Treg3")
+p<-DimPlot(seurathuman, reduction = 'wnn.umap', label = TRUE, repel = TRUE, label.size = 5) + NoLegend()
+ggsave(filename=paste("UMAP_RNA_ADT_HumanAnnotation.png",sep=""),plot=p,device="png",dpi=600,path=workdirrna,height=10,width=10)
+p<-DimPlot(seuratrhesus, reduction = 'wnn.umap', label = TRUE, repel = TRUE, label.size = 5) + NoLegend()
+ggsave(filename=paste("UMAP_RNA_RhesusAnnotation.png",sep=""),plot=p,device="png",dpi=600,path=workdirrna,height=10,width=10)
+
+#saveRDS(seurathuman, file=paste(workdir,"seurathumanintegrated",sep="/"))
+```
+
+```{r}
+#p<-Clustered_DotPlot(seurat_object = seuratrhesus, features = temp6, assay = "RNA")
+#ggsave(filename=paste("ClusteredDotplothuman.png",sep=""),plot=p[[2]],device="png",dpi=600,path=workdiradt,height=10,width=10)
+
+#Human
+temp <- as.data.frame(Idents(seurathuman))
+temp <- cbind(temp, seurathuman$time)
+temp <- cbind(temp, seurathuman$sample)
+colnames(temp) <- c("Cluster", "Time", "Sample")
+temp$ClusterTimeSample <- paste(temp$Cluster,temp$Sample,sep="_")
+
+temp4 <- as.data.frame(table(temp$ClusterTimeSample))
+colnames(temp4) <- c("ClusterTimeSample","Frequency")
+temp5 <- unique(temp)
+rownames(temp5) <- NULL
+temp4 <- merge(temp4,temp5,by.x="ClusterTimeSample",by.y="ClusterTimeSample")
+temp6 <- as.data.frame(table(temp$Sample))
+temp4$sampleid <- stringr::str_sub(temp4$Sample,4,5)
+
+for(i in 1:nrow(temp6)) {
+  temp4$Frequency[temp4$Sample==temp6$Var1[i]] <- (temp4$Frequency[temp4$Sample==temp6$Var1[i]])/(temp6$Freq[i])
+}
+temp8<-aggregate(Frequency~Cluster+Time,data=temp4,mean)
+
+temp2 <- split(temp8, temp8$Time)
+temp2[[1]] <- sort_by(temp2[[1]], temp2[[1]]$Frequency, decreasing = T)
+temp3 <- as.character(temp2[[1]]$Cluster)
+
+#p4<-ggplot(data=temp8, aes(x=Cluster, y=Frequency, fill = Time, colour = Time)) + geom_bar(stat="identity", alpha = 0.5, #position = "dodge")
+#p4[["data"]][["Cluster"]] <- forcats::fct_relevel(p4[["data"]][["Cluster"]], temp3)
+#p4[["data"]][["Time"]] <- forcats::fct_relevel(p4[["data"]][["Time"]], c("W0","W8","W22"))
+#ggsave(filename="ClusterChangeTimeHuman.png",plot=p4,device="png",dpi=600,path=workdiradt,height=7,width=12)
+
+p4<-ggplot(data=temp4, aes(x=Time, y=Frequency, fill = sampleid, colour = sampleid)) + geom_point(stat="identity", alpha = 0.5) + geom_line(aes(group = sampleid)) + facet_wrap(~Cluster)
+p4[["data"]][["Time"]] <- forcats::fct_relevel(p4[["data"]][["Time"]], c("W0","W8","W22"))
+p4[["data"]][["sampleid"]] <- forcats::fct_relevel(p4[["data"]][["sampleid"]], c("D1","D2","D3"))
+p4[["data"]][["Cluster"]] <- forcats::fct_relevel(p4[["data"]][["Cluster"]], temp3)
+ggsave(filename="ClusterChangeTimeHuman.png",plot=p4,device="png",dpi=600,path=workdiradt,height=7,width=12)
+
+#Rhesus
+temp <- as.data.frame(Idents(seuratrhesus))
+temp <- cbind(temp, seuratrhesus$time)
+temp <- cbind(temp, seuratrhesus$sample)
+colnames(temp) <- c("Cluster", "Time", "Sample")
+temp$ClusterTimeSample <- paste(temp$Cluster,temp$Sample,sep="_")
+
+temp4 <- as.data.frame(table(temp$ClusterTimeSample))
+colnames(temp4) <- c("ClusterTimeSample","Frequency")
+temp5 <- unique(temp)
+rownames(temp5) <- NULL
+temp4 <- merge(temp4,temp5,by.x="ClusterTimeSample",by.y="ClusterTimeSample")
+temp6 <- as.data.frame(table(temp$Sample))
+temp4$sampleid <- stringr::str_sub(temp4$Sample,4,5)
+
+for(i in 1:nrow(temp6)) {
+  temp4$Frequency[temp4$Sample==temp6$Var1[i]] <- (temp4$Frequency[temp4$Sample==temp6$Var1[i]])/(temp6$Freq[i])
+}
+temp8<-aggregate(Frequency~Cluster+Time,data=temp4,mean)
+
+temp2 <- split(temp8, temp8$Time)
+temp2[[1]] <- sort_by(temp2[[1]], temp2[[1]]$Frequency, decreasing = T)
+temp3 <- as.character(temp2[[1]]$Cluster)
+
+#p4<-ggplot(data=temp8, aes(x=Cluster, y=Frequency, fill = Time, colour = Time)) + geom_bar(stat="identity", alpha = 0.5, #position = "dodge")
+#p4[["data"]][["Cluster"]] <- forcats::fct_relevel(p4[["data"]][["Cluster"]], temp3)
+#p4[["data"]][["Time"]] <- forcats::fct_relevel(p4[["data"]][["Time"]], c("W0","W8","W22"))
+#ggsave(filename="ClusterChangeTimeRhesus.png",plot=p4,device="png",dpi=600,path=workdiradt,height=7,width=12)
+
+p4<-ggplot(data=temp4, aes(x=Time, y=Frequency, fill = sampleid, colour = sampleid)) + geom_point(stat="identity", alpha = 0.5) + geom_line(aes(group = sampleid)) + facet_wrap(~Cluster)
+p4[["data"]][["Time"]] <- forcats::fct_relevel(p4[["data"]][["Time"]], c("W0","W8","W22"))
+p4[["data"]][["sampleid"]] <- forcats::fct_relevel(p4[["data"]][["sampleid"]], c("D1","D2","D3"))
+p4[["data"]][["Cluster"]] <- forcats::fct_relevel(p4[["data"]][["Cluster"]], as.character((0:(length(levels(temp4$Cluster))-1))))
+ggsave(filename="ClusterChangeTimeRhesus.png",plot=p4,device="png",dpi=600,path=workdiradt,height=7,width=12)
+#saveRDS(seuratlist[[1]], file=paste(workdir,"seurathumanwell1",sep="/"))
+#saveRDS(seuratlist[[2]], file=paste(workdir,"seuratmmulwell1",sep="/"))
+#saveRDS(seuratlist[[3]], file=paste(workdir,"seurathumanwell2",sep="/"))
+#saveRDS(seuratlist[[4]], file=paste(workdir,"seuratmmulwell2",sep="/"))
+```
+
+```{r}
+
+```
+
+```{r}
+#Human
+DefaultAssay(seurathuman) <- "RNA"
+scehuman <- as.SingleCellExperiment(seurathuman)
+
+logcounts(scehuman) <- log(counts(scehuman) + 1)
+scehuman <- runPCA(scehuman, ncomponents=30)
+scehuman <- runUMAP(scehuman)
+plotUMAP(scehuman)
+
+milohuman <- Milo(scehuman)
+milohuman <- buildGraph(milohuman, k = 50, d = 30)
+milohuman <- makeNhoods(milohuman, prop = 0.2, k = 50, d = 30, refined = T, refinement_scheme = "graph")
+plotNhoodSizeHist(milohuman)
+
+milohuman <- countCells(milohuman, meta.data = data.frame(colData(milohuman)), samples="sample")
+
+trajhuman <- data.frame(colData(milohuman))[,c("individual", "time")]
+trajhuman <- distinct(trajhuman)
+rownames(trajhuman) <- paste(trajhuman$individual,trajhuman$time,sep="-")
+## Reorder rownames to match columns of nhoodCounts(milo)
+trajhuman <- trajhuman[colnames(nhoodCounts(milohuman)), , drop=FALSE]
+
+da_results <- testNhoods(milohuman, design = ~ individual + time, design.df = trajhuman, fdr.weighting="graph-overlap", glmm.solver="Fisher", REML=TRUE, norm.method="TMM", fail.on.error=FALSE)
+milohuman <- buildNhoodGraph(milohuman, overlap=25)
+p<-plotUMAP(milohuman, colour_by="time", shape_by="individual", point_alpha=0.3) + plotNhoodGraphDA(milohuman, da_results, alpha=0.1) + plot_layout(guides="auto" )
+ggsave(filename="MiloHumanMM.png",plot=p,device="png",dpi=600,path=workdirrna,height=10,width=15)
+
+temp <- as.data.frame(seurathuman@reductions[["wnn.umap"]]@cell.embeddings)
+temp$individual <- seurathuman$individual
+temp$time <- seurathuman$time
+temp$cellname <- colnames(seurathuman)
+
+p<-ggplot(temp,aes(x=wnnUMAP_1,y=wnnUMAP_2)) + geom_density2d_filled(contour_var="ndensity") + geom_point(alpha=0.3,size=0.3) + facet_grid(time~individual)
+p[["data"]][["individual"]] <- forcats::fct_relevel(p[["data"]][["individual"]], c("Hu-D1","Hu-D2"))
+p[["data"]][["time"]] <- forcats::fct_relevel(p[["data"]][["time"]], c("W22","W8","W0"))
+ggsave(filename="HumanIndividualsUMAP.png",plot=p,device="png",dpi=600,path=workdirrna,height=12,width=12)
+
+da_results <- testNhoods(milohuman, design = ~ time, design.df = trajhuman, fdr.weighting="graph-overlap", glmm.solver="Fisher", REML=TRUE, norm.method="TMM", fail.on.error=FALSE)
+milohuman <- buildNhoodGraph(milohuman, overlap=25)
+p<-plotUMAP(milohuman, colour_by="time", point_alpha=0.3) + plotNhoodGraphDA(milohuman, da_results, alpha=0.1) + plot_layout(guides="auto" )
+ggsave(filename="MiloHumantime.png",plot=p,device="png",dpi=600,path=workdirrna,height=10,width=15)
+
+da_results <- testNhoods(milohuman, design = ~ individual, design.df = trajhuman, fdr.weighting="graph-overlap", glmm.solver="Fisher", REML=TRUE, norm.method="TMM", fail.on.error=FALSE)
+milohuman <- buildNhoodGraph(milohuman, overlap=25)
+p<-plotUMAP(milohuman, colour_by="individual", point_alpha=0.3) + plotNhoodGraphDA(milohuman, da_results, alpha=0.1) + plot_layout(guides="auto" )
+ggsave(filename="MiloHumanindividual.png",plot=p,device="png",dpi=600,path=workdirrna,height=10,width=15)
+
+#Rhesus
+DefaultAssay(seuratrhesus) <- "RNA"
+scerhesus <- as.SingleCellExperiment(seuratrhesus)
+
+logcounts(scerhesus) <- log(counts(scerhesus) + 1)
+scerhesus <- runPCA(scerhesus, ncomponents=30)
+scerhesus <- runUMAP(scerhesus)
+plotUMAP(scerhesus)
+
+milorhesus <- Milo(scerhesus)
+milorhesus <- buildGraph(milorhesus, k = 50, d = 30)
+milorhesus <- makeNhoods(milorhesus, prop = 0.2, k = 50, d = 30, refined = T, refinement_scheme = "graph")
+plotNhoodSizeHist(milorhesus)
+
+milorhesus <- countCells(milorhesus, meta.data = data.frame(colData(milorhesus)), samples="sample")
+
+trajrhesus <- data.frame(colData(milorhesus))[,c("individual", "time")]
+trajrhesus <- distinct(trajrhesus)
+rownames(trajrhesus) <- paste(trajrhesus$individual,trajrhesus$time,sep="-")
+## Reorder rownames to match columns of nhoodCounts(milo)
+trajrhesus <- trajrhesus[colnames(nhoodCounts(milorhesus)), , drop=FALSE]
+
+da_results <- testNhoods(milorhesus, design = ~ time + individual, design.df = trajrhesus)
+milorhesus <- buildNhoodGraph(milorhesus, overlap=25)
+p<-plotUMAP(milorhesus, colour_by="time", shape_by="individual", point_alpha=0.3) + plotNhoodGraphDA(milorhesus, da_results, alpha=0.1) + plot_layout(guides="auto" )
+ggsave(filename="MiloRhesusMM.png",plot=p,device="png",dpi=600,path=workdirrna,height=10,width=15)
+
+temp <- as.data.frame(seuratrhesus@reductions[["wnn.umap"]]@cell.embeddings)
+temp$individual <- seuratrhesus$individual
+temp$time <- seuratrhesus$time
+temp$cellname <- colnames(seuratrhesus)
+
+p<-ggplot(temp,aes(x=wnnUMAP_1,y=wnnUMAP_2)) + geom_density2d_filled(contour_var="ndensity") + geom_point(alpha=0.3,size=0.3) + facet_grid(time~individual)
+p[["data"]][["individual"]] <- forcats::fct_relevel(p[["data"]][["individual"]], c("Rh-D1","Rh-D2","Rh-D3"))
+p[["data"]][["time"]] <- forcats::fct_relevel(p[["data"]][["time"]], c("W22","W8","W0"))
+ggsave(filename="RhesusIndividualsUMAP.png",plot=p,device="png",dpi=600,path=workdirrna,height=12,width=12)
+
+da_results <- testNhoods(milorhesus, design = ~ time, design.df = trajrhesus, fdr.weighting="graph-overlap", glmm.solver="Fisher", REML=TRUE, norm.method="TMM", fail.on.error=FALSE)
+milorhesus <- buildNhoodGraph(milorhesus, overlap=25)
+p<-plotUMAP(milorhesus, colour_by="time", point_alpha=0.3) + plotNhoodGraphDA(milorhesus, da_results, alpha=0.1) + plot_layout(guides="auto" )
+ggsave(filename="MiloRhesustime.png",plot=p,device="png",dpi=600,path=workdirrna,height=10,width=15)
+
+da_results <- testNhoods(milorhesus, design = ~ individual, design.df = trajrhesus, fdr.weighting="graph-overlap", glmm.solver="Fisher", REML=TRUE, norm.method="TMM", fail.on.error=FALSE)
+milorhesus <- buildNhoodGraph(milorhesus, overlap=25)
+p<-plotUMAP(milorhesus, colour_by="individual", point_alpha=0.3) + plotNhoodGraphDA(milorhesus, da_results, alpha=0.1) + plot_layout(guides="auto" )
+ggsave(filename="MiloRhesusindividual.png",plot=p,device="png",dpi=600,path=workdirrna,height=10,width=15)
+```
