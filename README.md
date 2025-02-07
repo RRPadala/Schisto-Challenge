@@ -5,4 +5,4 @@ Overview of Experiment
 ![ExpDesign9Dec2024](https://github.com/user-attachments/assets/7fe11595-89fb-4449-832b-459b35372687)
 
 This pilot study was to determine the feasibility of further analysis of a larger set of samples. On December 2024, the pilot study was judged a success and a larger study will follow in February 2025. 
-I have finished my internship and am no longer a part of the laboratory but this repo contains my code used in the pilot study. This work was performed as a part of my Master's internship under Dr. Ahmed Mahfouz and Mikhael Manurung.
+I have finished my internship and am no longer a part of the laboratory but this repo contains my code used in the pilot study. This work was performed as the second part of my second Master's internship under Dr. Ahmed Mahfouz and Mikhael Manurung.
