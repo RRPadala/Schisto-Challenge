@@ -5,6 +5,8 @@ date: "2024-09-05"
 output: html_document
 ---
 
+Analysis of the pilot data from a cross-species schistosomiasis challenge experiment.
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -44,6 +46,7 @@ library(Nebulosa)
 library(xlsx)
 ```
 
+Reading the CITE-seq data files
 ```{r}
 gemclass1 <- read.csv("schisto cite-seq/gem_classification1.csv")
 
@@ -74,6 +77,7 @@ workdirhto <- paste(workdir,"plots/HTO",sep="/")
 ```
 
 ```{r}
+#Reformat Seurat Objects so we have HTO, ADT, and RNA assays separate
 seuratfilt1[["HTO"]] <- CreateAssayObject(counts = LayerData(seuratfilt1, layer = "counts.Antibody Capture", features = HTO1))
 seuratfilt2[["HTO"]] <- CreateAssayObject(counts = LayerData(seuratfilt2, layer = "counts.Antibody Capture", features = HTO2))
 
@@ -88,10 +92,10 @@ temp <- grep(pattern = "^Mmul-|^GRCh38-", rownames(seuratfilt2))
 seuratfilt2@assays[["RNA"]]@layers[["counts.Gene Expression"]] <- seuratfilt2@assays[["RNA"]]@layers[["counts.Gene Expression"]][temp,]
 LayerData(seuratfilt2, layer = "counts.Antibody Capture", assay = "RNA") <- NULL
 
-#Gene References
+#Gene References provided by technician
 refs <- rtracklayer::import(con=paste(workdir,"genes.gtf",sep="/"),format="gtf")
 
-#Extract mitochondrial genes
+#Extract mitochondrial genes from chromosome identifiers
 Mmulmtgenemetadata <- select(as.data.frame(filter(refs, seqnames == "Mmul_10_NC_005943.1")@elementMetadata@listData),c("locus_tag","gene"))
 Mmulmt <- unique(filter(refs, seqnames == "Mmul_10_NC_005943.1")@elementMetadata@listData[["gene_id"]])
 Mmulmt <- gsub("_","-",Mmulmt)
@@ -108,20 +112,27 @@ Hugenemetadata <- filter(Hugenemetadata,stringr::str_detect(gene_name, "^GRCh38_
 Hugenemetadata$gene_id <- gsub("GRCh38__","",Hugenemetadata$gene_id)
 Hugenemetadata$gene_name <- gsub("__","--",Hugenemetadata$gene_name)
 
+#Convert gene names from ensembl to common names
+#Also removes duplicates and genes that could not be looked up
 Hugenemetadata$gene_name <- mapIds(hgu95av2.db, keys=Hugenemetadata$gene_id, column=c("SYMBOL"), keytype="ENSEMBL")
 Hugenemetadata$gene_name[is.na(Hugenemetadata$gene_name)] <- Hugenemetadata$gene_id[is.na(Hugenemetadata$gene_name)]
 Hugenemetadata$hasduplicate <- duplicated(Hugenemetadata$gene_name)
 rownames(Hugenemetadata) <- Hugenemetadata$gene_id
 Hugenemetadata$gene_name[duplicated(Hugenemetadata$gene_name)] <- Hugenemetadata$gene_id[duplicated(Hugenemetadata$gene_name)]
-#Humt <- mapIds(hgu95av2.db, keys=Humt, column=c("SYMBOL"), keytype="ENSEMBL")
 
+#Small function that does the above so we can switch back and forth whenever we want
 ensembl_recode_clean <- function(x) {
   temp <- Hugenemetadata[x,]
   x <- temp$gene_name
   x
 }
+```
 
-#Dataset 1
+Demultiplexing with hashedDrops
+```{r}
+#Confidence threshold lowered based on previous results
+
+#Well 1
 res3 <- hashedDrops(seuratfilt1@assays[["HTO"]]@counts, confident.min = 0.5)
 
 res3$Assignment <- "unassigned"
@@ -191,7 +202,7 @@ for(i in 1:7) {
   ggsave(filename=tempname,plot=p,device="png",dpi=600,path=temppath,height=7,width=7)
 }
 
-#Dataset 2
+#Well 2
 res4 <- hashedDrops(seuratfilt2@assays[["HTO"]]@counts, confident.min = 0.5)
 
 res4$Assignment <- "unassigned"
@@ -262,13 +273,16 @@ for(i in 1:7) {
 }
 ```
 
+Quality Control Metrics
 ```{r}
+#Mitochondrial Fraction
 seurat1human$mtpct <- Matrix::colSums(seurat1human[["RNA"]]$counts[Humt, ])/Matrix::colSums(seurat1human[["RNA"]]$counts)
 seurat1mmul$mtpct <- Matrix::colSums(seurat1mmul[["RNA"]]$counts[Mmulmt, ])/Matrix::colSums(seurat1mmul[["RNA"]]$counts)
 
 seurat2human$mtpct <- Matrix::colSums(seurat2human[["RNA"]]$counts[Humt, ])/Matrix::colSums(seurat2human[["RNA"]]$counts)
 seurat2mmul$mtpct <- Matrix::colSums(seurat2mmul[["RNA"]]$counts[Mmulmt, ])/Matrix::colSums(seurat2mmul[["RNA"]]$counts)
 
+#Finding ribosomal genes
 rhesusribo <- grep("-RP[S|L]", rownames(seurat1mmul), value = T)
 seurat1human <- Add_Mito_Ribo(object = seurat1human, species = "Human", ensembl_ids = T)
 seurat2human <- Add_Mito_Ribo(object = seurat2human, species = "Human", ensembl_ids = T)
@@ -290,6 +304,7 @@ ggsave(filename="Vln_rhesus_1.png",plot=p2,device="png",dpi=600,path=workdirrna)
 ggsave(filename="Vln_human_2.png",plot=p3,device="png",dpi=600,path=workdirrna)
 ggsave(filename="Vln_rhesus_2.png",plot=p4,device="png",dpi=600,path=workdirrna)
 
+#Reorder samples to make sure they are ascending chronologically within each individual
 humansampleorder <- c("Hu-D1-W0","Hu-D1-W8","Hu-D1-W22","Hu-D2-W0","Hu-D2-W8","Hu-D2-W22")
 rhesussampleorder <- c("Rh-D1-W8","Rh-D1-W22","Rh-D2-W0","Rh-D2-W8","Rh-D2-W22","Rh-D3-W0","Rh-D3-W8","Rh-D3-W22")
 
@@ -420,6 +435,7 @@ p <- temp %>% mutate(Sample = forcats::fct_relevel(Sample, c(humansampleorder,rh
 ggsave(filename="CellComplexityComparisonSamples.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=12)
 ```
 
+Generating dimred plots of QC metrics
 ```{r}
 temp2 <- as.data.frame(seurat1human$nFeature_RNA)
 temp2 <- cbind(temp2, as.data.frame(seurat1human$nCount_RNA))
@@ -502,6 +518,7 @@ p<-DimPlot(seurat2mmul, reduction = "qumap") + NoLegend()
 ggsave(filename="QCUMAPRhesus2.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
 ```
 
+Filtering based on QC metrics
 ```{r}
 
 temp <- t(c(table(seurat1human$sample),table(seurat1mmul$sample)))
@@ -540,6 +557,7 @@ temp <- t(c(table(seuratlist[[3]]$sample),table(seuratlist[[4]]$sample)))
 write.table(temp, file = paste(workdirrna,"after_qc_cells2.txt",sep="/"), append = FALSE, quote = TRUE, sep = "\t", eol = "\n", na = "NA", dec = ".", row.names = F, col.names = T)
 ```
 
+Looking at ADT expression in stained cells and background droplets
 ```{r}
 stained_cells1 = colnames(seuratfilt1[["RNA"]]$`counts.Gene Expression`)
 background1 = setdiff(colnames(seuratraw1[["RNA"]]$`counts.Gene Expression`), stained_cells1)
@@ -552,10 +570,6 @@ rna2 <- seuratraw2[["RNA"]]$`counts.Gene Expression`
 
 prot1 <- seuratraw1[["RNA"]]$`counts.Antibody Capture`[ADT1,]
 prot2 <- seuratraw2[["RNA"]]$`counts.Antibody Capture`[ADT2,]
-
-
-#rbgene1 = grep(pattern = "-RP[S|L]", rownames(rna1), value = TRUE)
-#rbgene2 = grep(pattern = "-RP[S|L]", rownames(rna2), value = TRUE)
 
 md1 = data.frame(
   rna.size = log10(Matrix::colSums(rna1)), 
@@ -590,6 +604,7 @@ p2<-ggplot(md2, aes(x = log10(n.gene), y = prot.size )) +
 ggsave(filename="BackgroundScreen2.png",plot=p2,device="png",dpi=600,path=workdiradt)
 ```
 
+Normalising ADT expression in stained cells using background ADT expression
 ```{r}
 background_drops1 = rownames(
   md1[ md1$prot.size > 1 & 
@@ -653,6 +668,7 @@ cells.dsb.norm = DSBNormalizeProtein(
 seuratlist[["rhesus2"]][["ADT"]]$data = cells.dsb.norm
 ```
 
+Plotting ADT expression levels and comparing wells and species
 ```{r}
 test <- as.data.frame(Matrix::colMeans(seuratlist[["human1"]][["ADT"]]$counts))
 test$sample <- seuratlist[["human1"]]$sample
@@ -705,9 +721,11 @@ ggsave(filename="rhesus1_dsbADTexpression.png",plot=p3,device="png",dpi=600,path
 ggsave(filename="rhesus2_dsbADTexpression.png",plot=p4,device="png",dpi=600,path=workdiradt,height=7,width=7)
 ```
 
+Plotting ADT expression levels for specific antibodies comparing species
 ```{r}
 PROT = grep(pattern = "^Isotype-", rownames(seuratfilt1[["ADT"]]), value = TRUE, invert = TRUE)
 
+#List of cross-reactive antibodies between humans and macaques. Only CR antibodies are used in the rhesus data from now on.
 PROTCRcheck <- readRDS("Antibody Cross Reactivity")
 rownames(PROTCRcheck) <- PROTCRcheck[,1]
 PROT2 <- PROTCRcheck$Antibody[PROTCRcheck$`Cross-Reactive`]
@@ -802,6 +820,7 @@ DefaultAssay(tempseurat) <- "RNA"
 DefaultAssay(tempseurat2) <- "RNA"
 ```
 
+Integrating the two wells. ADT integration is via CyCombine and RNA integration is via Harmony.
 ```{r}
 seurat1human <- NULL
 seurat1mmul <- NULL
@@ -902,6 +921,7 @@ seuratrhesus@assays$ADT@scale.data <- temp
 seuratrhesus <- RunPCA(seuratrhesus, reduction.name = 'pcaa', verbose = FALSE)
 ```
 
+Another look at the dimred plots of QC metrics
 ```{r}
 seurathuman$mtpct <- seurathuman$mtpct*100
 seurathuman <- ScaleData(seurathuman, features = rownames(seurathuman[["QC"]]), assay = "QC",verbose = FALSE)
@@ -926,6 +946,7 @@ p<-FeaturePlot(seuratrhesus, features = c("nFeature_RNA","nCount_RNA","mtpct","p
 ggsave(filename="QUMAPRhesus_QC.png",plot=p,device="png",dpi=600,path=workdirrna,height=12,width=12)
 ```
 
+Using Seurat's WNN cluster algorithm to combine RNA and ADT data.
 ```{r}
 #Human
 seurathuman <- FindMultiModalNeighbors(seurathuman, reduction.list = list("harmony", "pcaa"), dims.list = list(1:30, 1:18), verbose = FALSE)
@@ -943,15 +964,6 @@ ggsave(filename="UMAP_RNA_ADT_human.png",plot=p,device="png",dpi=600,path=workdi
 p<-FeaturePlot(seurathuman, features = c("nFeature_RNA","nCount_RNA","mtpct","percent_ribo","log10GenesPerUMI"), reduction = "wnn.umap")
 ggsave(filename="QUMAP_RNA_ADT_human_QC.png",plot=p,device="png",dpi=600,path=workdirrna,height=12,width=12)
 
-#DefaultAssay(seurathuman) <- "RNA"
-#seurathuman <- FindNeighbors(seurathuman, reduction = "harmony", verbose = FALSE)
-#seurathuman <- RunUMAP(seurathuman, dims = 1:10, verbose = FALSE)
-#seurathuman <- FindClusters(seurathuman, graph.name = "RNA_snn", resolution = 1, verbose = FALSE)
-
-#Idents(seurathuman) <- "RNA_snn_res.1"
-#p <- DimPlot(seurathuman, reduction = 'umap', label = TRUE, repel = TRUE, label.size = 2.5) + NoLegend()
-#ggsave(filename="UMAP_RNA_human.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
-
 #Rhesus
 seuratrhesus <- FindMultiModalNeighbors(seuratrhesus, reduction.list = list("harmony", "pcaa"), dims.list = list(1:30, 1:18), verbose = FALSE)
 seuratrhesus <- RunUMAP(seuratrhesus, nn.name = "weighted.nn", reduction.name = "wnn.umap", reduction.key = "wnnUMAP_", verbose = FALSE)
@@ -966,14 +978,6 @@ Idents(seuratrhesus) <- "wsnn_res.1"
 p <- DimPlot(seuratrhesus, reduction = 'wnn.umap', label = TRUE, repel = TRUE, label.size = 2.5) + NoLegend()
 ggsave(filename="UMAP_RNA_ADT_rhesus.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
 
-#DefaultAssay(seuratrhesus) <- "RNA"
-#seuratrhesus <- FindNeighbors(seuratrhesus, reduction = "harmony", verbose = FALSE)
-#seuratrhesus <- RunUMAP(seuratrhesus, dims = 1:10, verbose = FALSE)
-#seuratrhesus <- FindClusters(seuratrhesus, graph.name = "RNA_snn", resolution = 1, verbose = FALSE)
-
-#Idents(seuratrhesus) <- "RNA_snn_res.1"
-#p <- DimPlot(seuratrhesus, reduction = 'umap', label = TRUE, repel = TRUE, label.size = 2.5) + NoLegend()
-#ggsave(filename="UMAP_RNA_rhesus.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
 p<-FeaturePlot(seuratrhesus, features = c("nFeature_RNA","nCount_RNA","mtpct","percent_ribo","log10GenesPerUMI"), reduction = "wnn.umap")
 ggsave(filename="QUMAP_RNA_ADT_rhesus_QC.png",plot=p,device="png",dpi=600,path=workdirrna,height=12,width=12)
 
@@ -983,10 +987,7 @@ ggsave(filename="QUMAP_RNA_ADT_rhesus_QC.png",plot=p,device="png",dpi=600,path=w
 #ggsave(filename="Rhesus_clustree.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
 ```
 
-```{r}
-#Run Annotation here
-```
-
+Comparing ADT expression levels as a whole
 ```{r}
 #CrossSpecies
 temp <- as.data.frame(MatrixGenerics::rowMedians(seurathuman@assays[["ADT"]]@scale.data))
@@ -1001,6 +1002,7 @@ p[["data"]][["protein"]] <- forcats::fct_relevel(p[["data"]][["protein"]], temp3
 ggsave(filename="CrossSpecies_ADT_Expression.png",plot=p,device="png",dpi=600,path=workdiradt,height=15,width=15)
 ```
 
+Automatic annotation to compare with manual annotation. Cells are manually annotated elsewhere.
 ```{r}
 celldexref <- readRDS("schisto cite-seq/MonacoImmuneDataEnsembl")
 #celldexref <- MonacoImmuneData(ensembl=TRUE)
@@ -1019,6 +1021,7 @@ ggsave(filename=paste("UMAP_RNA_RhesusAnnotation.png",sep=""),plot=p,device="png
 #saveRDS(seurathuman, file=paste(workdir,"seurathumanintegrated",sep="/"))
 ```
 
+Plotting change in cell cluster sizes over time and per sample.
 ```{r}
 #p<-Clustered_DotPlot(seurat_object = seuratrhesus, features = temp6, assay = "RNA")
 #ggsave(filename=paste("ClusteredDotplothuman.png",sep=""),plot=p[[2]],device="png",dpi=600,path=workdiradt,height=10,width=10)
@@ -1098,10 +1101,7 @@ ggsave(filename="ClusterChangeTimeRhesus.png",plot=p4,device="png",dpi=600,path=
 #saveRDS(seuratlist[[4]], file=paste(workdir,"seuratmmulwell2",sep="/"))
 ```
 
-```{r}
-
-```
-
+Using milo to perform cluster free differential abundance analysis.
 ```{r}
 #Human
 DefaultAssay(seurathuman) <- "RNA"

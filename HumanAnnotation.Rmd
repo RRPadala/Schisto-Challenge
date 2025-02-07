@@ -1,0 +1,890 @@
+---
+title: "HumanAnnotation.Rmd"
+author: "Rahul"
+date: "2024-12-09"
+output: html_document
+---
+
+Using the top human PBMC markers provided by Azimuth (https://azimuth.hubmapconsortium.org/references/human_pbmc/), we manually annotate human cells.
+
+Plotting expression of the top markers for each cell type.
+Basic Cell types
+```{r}
+humanmono <- c("CTSS", "FCN1", "NEAT1", "LYZ", "PSAP", "S100A9", "AIF1", "MNDA", "SERPINA1", "TYROBP")
+humanmono <- mapIds(hgu95av2.db, keys=humanmono, column=c("ENSEMBL"), keytype="SYMBOL")
+humanmono <- na.omit(humanmono)
+p<-VlnPlot(seurathuman, features = c(humanmono), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="Mono.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humanmono, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="Mono Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="Mono.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humancd4t <- c("IL7R", "MAL", "LTB", "CD4", "LDHB", "TPT1", "TRAC", "TMSB10", "CD3D", "CD3G")
+humancd4t <- mapIds(hgu95av2.db, keys=humancd4t, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd4t <- na.omit(humancd4t)
+p<-VlnPlot(seurathuman, features = c(humancd4t), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD4T.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd4t, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD4T Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD4T.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humancd8t <- c("CD8B", "CD8A", "CD3D", "TMSB10", "HCST", "CD3G", "LINC02446", "CTSW", "CD3E", "TRAC")
+humancd8t <- mapIds(hgu95av2.db, keys=humancd8t, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd8t <- na.omit(humancd8t)
+p<-VlnPlot(seurathuman, features = c(humancd8t), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD8T.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd8t, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD8T Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD8T.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humannk <- c("NKG7", "KLRD1", "TYROBP", "GNLY", "FCER1G", "PRF1", "CD247", "KLRF1", "CST7", "GZMB")
+humannk <- mapIds(hgu95av2.db, keys=humannk, column=c("ENSEMBL"), keytype="SYMBOL")
+humannk <- na.omit(humannk)
+p<-VlnPlot(seurathuman, features = c(humannk), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="NK.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humannk, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="NK Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="NK.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humanb <- c("CD79A", "RALGPS2", "CD79B", "MS4A1", "BANK1", "CD74", "TNFRSF13C", "HLA-DQA1", "IGHM", "MEF2C")
+humanb <- mapIds(hgu95av2.db, keys=humanb, column=c("ENSEMBL"), keytype="SYMBOL")
+humanb <- na.omit(humanb)
+p<-VlnPlot(seurathuman, features = c(humanb), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="B.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humanb, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="B Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="B.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humanot <- c("CD3D", "TRDC", "GZMK", "KLRB1", "NKG7", "TRGC2", "CST7", "LYAR", "KLRG1", "GZMA")
+humanot <- mapIds(hgu95av2.db, keys=humanot, column=c("ENSEMBL"), keytype="SYMBOL")
+humanot <- na.omit(humanot)
+p<-VlnPlot(seurathuman, features = c(humanot), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="OtherT.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humanot, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="OtherT Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="OtherT.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humandc <- c("CD74", "HLA-DPA1", "HLA-DPB1", "HLA-DQA1", "CCDC88A", "HLA-DRA", "HLA-DMA", "CST3", "HLA-DQB1", "HLA-DRB1")
+humandc <- mapIds(hgu95av2.db, keys=humandc, column=c("ENSEMBL"), keytype="SYMBOL")
+humandc <- na.omit(humandc)
+p<-VlnPlot(seurathuman, features = c(humandc), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="DC.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humandc, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="DC Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="DC.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+```
+
+B cells
+```{r}
+humanbint <- c("MS4A1", "TNFRSF13B", "IGHM", "IGHD", "AIM2", "CD79A", "LINC01857", "RALGPS2", "BANK1", "CD79B")
+humanbint <- mapIds(hgu95av2.db, keys=humanbint, column=c("ENSEMBL"), keytype="SYMBOL")
+humanbint <- na.omit(humanbint)
+p<-VlnPlot(seurathuman, features = c(humanbint), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="Bint.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humanbint, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="Bint Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="Bint.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humanbmem <- c("MS4A1", "COCH", "AIM2", "BANK1", "SSPN", "CD79A", "TEX9", "RALGPS2", "TNFRSF13C", "LINC01781")
+humanbmem <- mapIds(hgu95av2.db, keys=humanbmem, column=c("ENSEMBL"), keytype="SYMBOL")
+humanbmem <- na.omit(humanbmem)
+p<-VlnPlot(seurathuman, features = c(humanbmem), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="Bmem.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humanbmem, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="Bmem Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="Bmem.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humanbnai <- c("IGHM", "IGHD", "CD79A", "IL4R", "MS4A1", "CXCR4", "BTG1", "TCL1A", "CD79B", "YBX3")
+humanbnai <- mapIds(hgu95av2.db, keys=humanbnai, column=c("ENSEMBL"), keytype="SYMBOL")
+humanbnai <- na.omit(humanbnai)
+p<-VlnPlot(seurathuman, features = c(humanbnai), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="Bnai.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humanbnai, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="Bnai Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="Bnai.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humanbeff <- c("IGHA2", "MZB1", "TNFRSF17", "DERL3", "TXNDC5", "TNFRSF13B", "POU2AF1", "CPNE5", "HRASLS2", "NT5DC2")
+humanbeff <- mapIds(hgu95av2.db, keys=humanbeff, column=c("ENSEMBL"), keytype="SYMBOL")
+humanbeff <- na.omit(humanbeff)
+p<-VlnPlot(seurathuman, features = c(humanbeff), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="Plasma.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humanbeff, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="Plasma Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="Plasma.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+```
+
+CD4 T cells
+```{r}
+humancd4ctl <- c("GZMH", "CD4", "FGFBP2", "ITGB1", "GZMA", "CST7", "GNLY", "B2M", "IL32", "NKG7")
+humancd4ctl <- mapIds(hgu95av2.db, keys=humancd4ctl, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd4ctl <- na.omit(humancd4ctl)
+p<-VlnPlot(seurathuman, features = c(humancd4ctl), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD4CTL.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd4ctl, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD4CTL Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD4CTL.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humancd4nai <- c("TCF7", "CD4", "CCR7", "IL7R", "FHIT", "LEF1", "MAL", "NOSIP", "LDHB", "PIK3IP1")
+humancd4nai <- mapIds(hgu95av2.db, keys=humancd4nai, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd4nai <- na.omit(humancd4nai)
+p<-VlnPlot(seurathuman, features = c(humancd4nai), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD4nai.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd4nai, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD4nai Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD4nai.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humancd4prol <- c("MKI67", "TOP2A", "PCLAF", "CENPF", "TYMS", "NUSAP1", "ASPM", "PTTG1", "TPX2", "RRM2")
+humancd4prol <- mapIds(hgu95av2.db, keys=humancd4prol, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd4prol <- na.omit(humancd4prol)
+p<-VlnPlot(seurathuman, features = c(humancd4prol), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD4prol.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd4prol, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD4prol Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD4prol.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humancd4tcm <- c("IL7R", "TMSB10", "CD4", "ITGB1", "LTB", "TRAC", "AQP3", "LDHB", "IL32", "MAL")
+humancd4tcm <- mapIds(hgu95av2.db, keys=humancd4tcm, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd4tcm <- na.omit(humancd4tcm)
+p<-VlnPlot(seurathuman, features = c(humancd4tcm), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD4TCM.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd4tcm, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD4TCM Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD4TCM.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humancd4tem <- c("IL7R", "CCL5", "FYB1", "GZMK", "IL32", "GZMA", "KLRB1", "TRAC", "LTB", "AQP3")
+humancd4tem <- mapIds(hgu95av2.db, keys=humancd4tem, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd4tem <- na.omit(humancd4tem)
+p<-VlnPlot(seurathuman, features = c(humancd4tem), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD4TEM.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd4tem, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD4TEM Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD4TEM.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humancd4treg <- c("RTKN2", "FOXP3", "AC133644.2", "CD4", "IL2RA", "TIGIT", "CTLA4", "FCRL3", "LAIR2", "IKZF2")
+humancd4treg <- mapIds(hgu95av2.db, keys=humancd4treg, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd4treg <- na.omit(humancd4treg)
+p<-VlnPlot(seurathuman, features = c(humancd4treg), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD4Treg.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd4treg, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD4Treg Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD4Treg.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+```
+
+CD8 T cells
+```{r}
+humancd8nai <- c("CD8B", "S100B", "CCR7", "RGS10", "NOSIP", "LINC02446", "LEF1", "CRTAM", "CD8A", "OXNAD1")
+humancd8nai <- mapIds(hgu95av2.db, keys=humancd8nai, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd8nai <- na.omit(humancd8nai)
+p<-VlnPlot(seurathuman, features = c(humancd8nai), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD8nai.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd8nai, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD8nai Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD8nai.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humancd8prol <- c("MKI67", "CD8B", "TYMS", "TRAC", "PCLAF", "CD3D", "CLSPN", "CD3G", "TK1", "RRM2")
+humancd8prol <- mapIds(hgu95av2.db, keys=humancd8prol, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd8prol <- na.omit(humancd8prol)
+p<-VlnPlot(seurathuman, features = c(humancd8prol), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD8prol.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd8prol, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD8prol Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD8prol.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humancd8tcm <- c("CD8B", "ANXA1", "CD8A", "KRT1", "LINC02446", "YBX3", "IL7R", "TRAC", "NELL2", "LDHB")
+humancd8tcm <- mapIds(hgu95av2.db, keys=humancd8tcm, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd8tcm <- na.omit(humancd8tcm)
+p<-VlnPlot(seurathuman, features = c(humancd8tcm), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD8TCM.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd8tcm, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD8TCM Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD8TCM.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humancd8tem <- c("CCL5", "GZMH", "CD8A", "TRAC", "KLRD1", "NKG7", "GZMK", "CST7", "CD8B", "TRGC2")
+humancd8tem <- mapIds(hgu95av2.db, keys=humancd8tem, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd8tem <- na.omit(humancd8tem)
+p<-VlnPlot(seurathuman, features = c(humancd8tem), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD8TEM.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd8tem, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD8TEM Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD8TEM.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+```
+
+DC cells
+```{r}
+humanaxdc <- c("PPP1R14A", "LILRA4", "AXL", "IL3RA", "SCT", "SCN9A", "LGMN", "DNASE1L3", "CLEC4C", "GAS6")
+humanaxdc <- mapIds(hgu95av2.db, keys=humanaxdc, column=c("ENSEMBL"), keytype="SYMBOL")
+humanaxdc <- na.omit(humanaxdc)
+p<-VlnPlot(seurathuman, features = c(humanaxdc), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="AXDC.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humanaxdc, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="AXDC Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="AXDC.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humancdc1 <- c("CLEC9A", "DNASE1L3", "C1orf54", "IDO1", "CLNK", "CADM1", "FLT3", "ENPP1", "XCR1", "NDRG2")
+humancdc1 <- mapIds(hgu95av2.db, keys=humancdc1, column=c("ENSEMBL"), keytype="SYMBOL")
+humancdc1 <- na.omit(humancdc1)
+p<-VlnPlot(seurathuman, features = c(humancdc1), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="cDC1.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancdc1, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="cDC1 Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="cDC1.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humancdc2 <- c("FCER1A", "HLA-DQA1", "CLEC10A", "CD1C", "ENHO", "PLD4", "GSN", "SLC38A1", "NDRG2", "AFF3")
+humancdc2 <- mapIds(hgu95av2.db, keys=humancdc2, column=c("ENSEMBL"), keytype="SYMBOL")
+humancdc2 <- na.omit(humancdc2)
+p<-VlnPlot(seurathuman, features = c(humancdc2), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="cDC2.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancdc2, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="cDC2 Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="cDC2.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humanpdc <- c("ITM2C", "PLD4", "SERPINF1", "LILRA4", "IL3RA", "TPM2", "MZB1", "SPIB", "IRF4", "SMPD3")
+humanpdc <- mapIds(hgu95av2.db, keys=humanpdc, column=c("ENSEMBL"), keytype="SYMBOL")
+humanpdc <- na.omit(humanpdc)
+p<-VlnPlot(seurathuman, features = c(humanpdc), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="pDC.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humanpdc, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="pDC Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="pDC.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+```
+
+Monocytes
+```{r}
+humancd14mono <- c("S100A9", "CTSS", "S100A8", "LYZ", "VCAN", "S100A12", "IL1B", "CD14", "G0S2", "FCN1")
+humancd14mono <- mapIds(hgu95av2.db, keys=humancd14mono, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd14mono <- na.omit(humancd14mono)
+p<-VlnPlot(seurathuman, features = c(humancd14mono), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD14 mono.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd14mono, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD14 mono Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD14 mono.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humancd16mono <- c("CDKN1C", "FCGR3A", "PTPRC", "LST1", "IER5", "MS4A7", "RHOC", "IFITM3", "AIF1", "HES4")
+humancd16mono <- mapIds(hgu95av2.db, keys=humancd16mono, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd16mono <- na.omit(humancd16mono)
+p<-VlnPlot(seurathuman, features = c(humancd16mono), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD16 mono.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd16mono, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD16 mono Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD16 mono.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+```
+
+NK cells
+```{r}
+humancd56dimNK <- c("GNLY", "TYROBP", "NKG7", "FCER1G", "GZMB", "TRDC", "PRF1", "FGFBP2", "SPON2", "KLRF1")
+humancd56dimNK <- mapIds(hgu95av2.db, keys=humancd56dimNK, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd56dimNK <- na.omit(humancd56dimNK)
+p<-VlnPlot(seurathuman, features = c(humancd56dimNK), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD56dim NK.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd56dimNK, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD56dim NK Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD56dim NK.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humanprolNK <- c("MKI67", "KLRF1", "TYMS", "TRDC", "TOP2A", "FCER1G", "PCLAF", "CD247", "CLSPN", "ASPM")
+humanprolNK <- mapIds(hgu95av2.db, keys=humanprolNK, column=c("ENSEMBL"), keytype="SYMBOL")
+humanprolNK <- na.omit(humanprolNK)
+p<-VlnPlot(seurathuman, features = c(humanprolNK), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="NKprol.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humanprolNK, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="NKprol Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="NKprol.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humancd56brightNK <- c("XCL2", "FCER1G", "SPINK2", "TRDC", "KLRC1", "XCL1", "SPTSSB", "PPP1R9A", "NCAM1", "TNFRSF11A")
+humancd56brightNK <- mapIds(hgu95av2.db, keys=humancd56brightNK, column=c("ENSEMBL"), keytype="SYMBOL")
+humancd56brightNK <- na.omit(humancd56brightNK)
+p<-VlnPlot(seurathuman, features = c(humancd56brightNK), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD56bright NK.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humancd56brightNK, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="CD56bright NK Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="CD56bright NK.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+```
+
+Others
+```{r}
+humaneryth <- c("HBD", "HBM", "AHSP", "ALAS2", "CA1", "SLC4A1", "TRIM58", "SELENBP1", "TMCC2")
+humaneryth <- mapIds(hgu95av2.db, keys=humaneryth, column=c("ENSEMBL"), keytype="SYMBOL")
+humaneryth <- na.omit(humaneryth)
+p<-VlnPlot(seurathuman, features = c(humaneryth), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="Eryth.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humaneryth, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="Eryth Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="Eryth.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humanhspc <- c("SPINK2", "PRSS57", "CYTL1", "EGFL7", "GATA2", "CD34", "SMIM24", "AVP", "MYB", "LAPTM4B")
+humanhspc <- mapIds(hgu95av2.db, keys=humanhspc, column=c("ENSEMBL"), keytype="SYMBOL")
+humanhspc <- na.omit(humanhspc)
+p<-VlnPlot(seurathuman, features = c(humanhspc), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="HSPC.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humanhspc, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="HSPC Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="HSPC.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humanilc <- c("KIT", "TRDC", "TTLL10", "LINC01229", "SOX4", "KLRB1", "TNFRSF18", "TNFRSF4", "IL1R1", "HPGDS")
+humanilc <- mapIds(hgu95av2.db, keys=humanilc, column=c("ENSEMBL"), keytype="SYMBOL")
+humanilc <- na.omit(humanilc)
+p<-VlnPlot(seurathuman, features = c(humanilc), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="ILC.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humanilc, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="ILC Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="ILC.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humanplat <- c("PPBP", "PF4", "NRGN", "GNG11", "CAVIN2", "TUBB1", "CLU", "HIST1H2AC", "RGS18", "GP9")
+humanplat <- mapIds(hgu95av2.db, keys=humanplat, column=c("ENSEMBL"), keytype="SYMBOL")
+humanplat <- na.omit(humanplat)
+p<-VlnPlot(seurathuman, features = c(humanplat), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="Platelets.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humanplat, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="Platelets Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="Platelets.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humandnt <- c("PTPN3", "MIR4422HG", "NUCB2", "CAV1", "DTHD1", "GZMA", "MYB", "FXYD2", "GZMK", "AC004585.1")
+humandnt <- mapIds(hgu95av2.db, keys=humandnt, column=c("ENSEMBL"), keytype="SYMBOL")
+humandnt <- na.omit(humandnt)
+p<-VlnPlot(seurathuman, features = c(humandnt), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="DN T.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humandnt, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="DN T Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="DN T.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humangdt <- c("TRDC", "TRGC1", "TRGC2", "KLRC1", "NKG7", "TRDV2", "CD7", "TRGV9", "KLRD1", "KLRG1")
+humangdt <- mapIds(hgu95av2.db, keys=humangdt, column=c("ENSEMBL"), keytype="SYMBOL")
+humangdt <- na.omit(humangdt)
+p<-VlnPlot(seurathuman, features = c(humangdt), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="GD T.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humangdt, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="GD T Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="GD T.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+
+humanmait <- c("KLRB1", "NKG7", "GZMK", "IL7R", "SLC4A10", "GZMA", "CXCR6", "PRSS35", "RBM24", "NCR3")
+humanmait <- mapIds(hgu95av2.db, keys=humanmait, column=c("ENSEMBL"), keytype="SYMBOL")
+humanmait <- na.omit(humanmait)
+p<-VlnPlot(seurathuman, features = c(humanmait), pt.size = 0, layer = "data", assay = "RNA")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="MAIT.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+DefaultAssay(seurathuman) <- "RNA"
+p<-Nebulosa::plot_density(seurathuman, features = humanmait, size = 0.1, joint = T, slot="data", reduction = "wnn.umap")
+for(i in 1:length(p)) {
+  p[[i]][["labels"]][["title"]] <- ensembl_recode_clean(p[[i]][["labels"]][["title"]])
+}
+ggsave(filename="MAIT Nebulosa.png",plot=p,device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman",sep="/"),height=15,width=15)
+ggsave(filename="MAIT.png",plot=(p[[length(p)]]+ NoLegend() + labs(title = NULL)),device="png",dpi=600,path=paste(workdirrna,"AnnotationHuman/Joint",sep="/"),height=7,width=7)
+```
+
+Applying the markers to our data.
+```{r}
+azimuthallmarkers <- c(humanaxdc,humanb,humanbeff,humanbint,humanbmem,humanbnai,humancd14mono,humancd16mono,humancd4ctl,humancd4nai,humancd4prol,humancd4t,humancd4tcm,humancd4tem,humancd4treg,humancd56brightNK,humancd56dimNK,humancd8nai,humancd8prol,humancd8t,humancd8tcm,humancd8tem,humancdc1,humancdc2,humandc,humandnt,humaneryth,humangdt,humanhspc,humanilc,humanmait,humanmono,humannk,humanot,humanpdc,humanplat,humanprolNK)
+azimuthallmarkers <- unique(azimuthallmarkers)
+
+temp <- FindAllMarkers(seurathuman,assay="RNA")
+temp <- temp %>% group_by(cluster) %>% dplyr::filter(p_val_adj <= 0.05)
+temp2 <- split(temp,temp$cluster)
+temp2 <- lapply(temp2, function(x) {
+  top <- dplyr::filter(x, avg_log2FC > 0)
+  if(nrow(top)>50) {
+    top <- sort_by(top, top$avg_log2FC, decreasing=T)
+    top <- top[1:50,]
+  }
+  bot <- dplyr::filter(x, avg_log2FC < 0)
+  if(nrow(bot)>50) {
+    bot <- sort_by(bot, bot$avg_log2FC, decreasing=F)
+    bot <- bot[1:50,]
+  }
+  x <- rbind(top,bot)
+  x <- sort_by(x, x$avg_log2FC, decreasing=T)
+  x$gene <- ensembl_recode_clean(x$gene)
+  x
+})
+
+temp2filt <- split(temp,temp$cluster)
+temp2filt <- lapply(temp2filt, function(x) {
+  top <- dplyr::filter(x, avg_log2FC > 0 & pct.1 > 0.05)
+  if(nrow(top)>50) {
+    top <- sort_by(top, top$avg_log2FC, decreasing=T)
+    top <- top[1:50,]
+  }
+  bot <- dplyr::filter(x, avg_log2FC < 0 & pct.1 > 0.05)
+  if(nrow(bot)>50) {
+    bot <- sort_by(bot, bot$avg_log2FC, decreasing=F)
+    bot <- bot[1:50,]
+  }
+  x <- rbind(top,bot)
+  x <- sort_by(x, x$avg_log2FC, decreasing=T)
+  x$gene <- ensembl_recode_clean(x$gene)
+  x
+})
+
+temp3 <- FindAllMarkers(seurathuman,assay="ADT",features=PROT)
+colnames(temp3)[7] <- "antibody"
+temp3 <- temp3 %>% group_by(cluster) %>% dplyr::filter(p_val_adj <= 0.05)
+temp4 <- split(temp3,temp3$cluster)
+temp4 <- lapply(temp4, function(x) {
+  x <- sort_by(x, x$avg_log2FC, decreasing=T)
+  x
+})
+
+temp5 <- split(temp,temp$cluster)
+temp5 <- lapply(temp5, function(x) {
+  temp6 <- tibble::column_to_rownames(x,"gene")
+  temp6$gene <- rownames(temp6)
+  temp6 <- temp6[azimuthallmarkers,]
+  temp6 <- na.omit(temp6)
+  temp6 <- sort_by(temp6, temp6$avg_log2FC, decreasing=T)
+  temp6$gene <- ensembl_recode_clean(temp6$gene)
+  temp6
+})
+```
+
+Exporting expression levels to excel for visualisation.
+```{r}
+#Writes the metadata to a local file
+wb <- createWorkbook(type="xlsx")
+sheetcxg <- createSheet(wb, sheetName = "Genes")
+sheetcxg2 <- createSheet(wb, sheetName = "GenesAzimuth")
+sheetcxg3 <- createSheet(wb, sheetName = "GenesFiltered")
+sheetcxg4 <- createSheet(wb, sheetName = "Antibodies")
+header<-c(paste("RNA + ADT UMAP clusters. Data created:",toString(Sys.time()),sep=" "))
+
+cstyle <- CellStyle(
+  wb,
+  fill = Fill(foregroundColor = "#ACB9CA",backgroundColor = "#ACB9CA",pattern = "SOLID_FOREGROUND"),
+)
+
+addDataFrame(
+  x=header,
+  sheet=sheetcxg,
+  startRow = 1,
+  startColumn = 1,
+  col.names = F,
+  row.names = F,
+  byrow = T
+)
+
+k<-1
+l<-3
+for(i in 1:length(temp2)) {
+  temp7<-temp2[[i]]
+  temp2[[i]] <- ungroup(temp2[[i]])
+  temp7<-dplyr::select(temp2[[i]],c("gene","avg_log2FC","pct.1","p_val_adj"))
+  temp7<-as.data.frame(temp7)
+  addDataFrame(
+    x=paste("Cluster:",temp2[[i]]$cluster[1],sep=" "),
+    sheet=sheetcxg,
+    startRow = l,
+    startColumn = (1+5*(i-1)),
+    col.names = F,
+    row.names = F,
+    byrow = T
+  )
+  addDataFrame(
+    x=temp7,
+    sheet=sheetcxg,
+    startRow = l+1,
+    startColumn = (1+5*(i-1)),
+    colnamesStyle = cstyle,
+    col.names = T,
+    row.names = F,
+    byrow = F
+  )
+}
+
+header <- "Only genes found in Azimuth's PBMC marker list"
+
+addDataFrame(
+  x=header,
+  sheet=sheetcxg2,
+  startRow = 1,
+  startColumn = 1,
+  col.names = F,
+  row.names = F,
+  byrow = T
+)
+
+for(i in 1:length(temp5)) {
+  temp7<-temp5[[i]]
+  temp5[[i]] <- ungroup(temp5[[i]])
+  temp7<-dplyr::select(temp5[[i]],c("gene","avg_log2FC","pct.1","p_val_adj"))
+  temp7<-as.data.frame(temp7)
+  addDataFrame(
+    x=paste("Cluster:",temp5[[i]]$cluster[1],sep=" "),
+    sheet=sheetcxg2,
+    startRow = l,
+    startColumn = (1+5*(i-1)),
+    col.names = F,
+    row.names = F,
+    byrow = T
+  )
+  addDataFrame(
+    x=temp7,
+    sheet=sheetcxg2,
+    startRow = l+1,
+    startColumn = (1+5*(i-1)),
+    colnamesStyle = cstyle,
+    col.names = T,
+    row.names = F,
+    byrow = F
+  )
+}
+
+header <- "Genes with pct.1 > 0.05"
+
+addDataFrame(
+  x=header,
+  sheet=sheetcxg3,
+  startRow = 1,
+  startColumn = 1,
+  col.names = F,
+  row.names = F,
+  byrow = T
+)
+
+for(i in 1:length(temp2filt)) {
+  temp7<-temp2filt[[i]]
+  temp2filt[[i]] <- ungroup(temp2filt[[i]])
+  temp7<-dplyr::select(temp2filt[[i]],c("gene","avg_log2FC","pct.1","p_val_adj"))
+  temp7<-as.data.frame(temp7)
+  addDataFrame(
+    x=paste("Cluster:",temp2filt[[i]]$cluster[1],sep=" "),
+    sheet=sheetcxg3,
+    startRow = l,
+    startColumn = (1+5*(i-1)),
+    col.names = F,
+    row.names = F,
+    byrow = T
+  )
+  addDataFrame(
+    x=temp7,
+    sheet=sheetcxg3,
+    startRow = l+1,
+    startColumn = (1+5*(i-1)),
+    colnamesStyle = cstyle,
+    col.names = T,
+    row.names = F,
+    byrow = F
+  )
+}
+
+for(i in 1:length(temp4)) {
+  temp4[[i]] <- ungroup(temp4[[i]])
+  temp7<-dplyr::select(temp4[[i]],c("antibody","avg_log2FC","pct.1","p_val_adj"))
+  temp7<-as.data.frame(temp7)
+  temp7$antibody <- gsub("Hu.|HuMs.|HuMsRt.","",temp7$antibody)
+  addDataFrame(
+    x=paste("Cluster:",temp4[[i]]$cluster[1],sep=" "),
+    sheet=sheetcxg4,
+    startRow = l,
+    startColumn = (1+5*(i-1)),
+    col.names = F,
+    row.names = F,
+    byrow = T
+  )
+  addDataFrame(
+    x=temp7,
+    sheet=sheetcxg4,
+    startRow = l+1,
+    startColumn = (1+5*(i-1)),
+    colnamesStyle = cstyle,
+    col.names = T,
+    row.names = F,
+    byrow = F
+  )
+}
+
+saveWorkbook(wb, file="HumanMarkers.xlsx")
+```
+
+Manually Annotating using above information
+```{r}
+manualannotation <- c("CD4 TCM", "CD4 naive", "CD8 TEM", "CD4 CTL", "B mem", "MAIT", "CD4 naive", "gammadelta T", "CD4 Treg", "CD4 naive", "CD16 mono", "CD56bright NK", "CD8 naive", "CD16 mono", "DC", "DC", "CD4 naive", "CD8 TCM", "CD4 CTL", "CD4 TCM", "pDC", "CD8 TCM", "CD14 mono", "CD4 naive", "DC", "CD56dim NK", "DC", "B naive")
+
+temp <- FindMarkers(seurathuman,assay="RNA",ident.1 = "11", ident.2 = "1")
+temp <- dplyr::filter(temp, p_val_adj <= 0.05 & pct.1 > 0.05)
+temp <- temp[azimuthallmarkers,]
+temp <- na.omit(temp)
+rownames(temp) <- ensembl_recode_clean(rownames(temp))
+
+#Erythrocyte and thrombocyte contamination detected in rhesus samples. Verify.
+#PPBP
+p<-FeaturePlot(seurathuman, features = "ENSG00000163736", reduction = "wnn.umap")
+p[[1]][["labels"]][["title"]] <- "PPBP"
+ggsave(filename="UMAP_RNA_ADT_human PPBP.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+#ALAS2
+p<-FeaturePlot(seurathuman, features = "ENSG00000158578", reduction = "wnn.umap")
+p[[1]][["labels"]][["title"]] <- "ALAS2"
+ggsave(filename="UMAP_RNA_ADT_human ALAS2.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+#DimPlot(seurathuman, reduction = "wnn.umap")
+
+p<-FeaturePlot(seurathuman, features = "ENSG00000188536", reduction = "wnn.umap")
+p[[1]][["labels"]][["title"]] <- "HBA2"
+ggsave(filename="UMAP_RNA_ADT_human HBA2.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+
+p<-FeaturePlot(seurathuman, features = "ENSG00000244734", reduction = "wnn.umap")
+p[[1]][["labels"]][["title"]] <- "HBB"
+ggsave(filename="UMAP_RNA_ADT_human HBB.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+
+names(manualannotation) <- levels(seurathuman)
+seurathuman <- RenameIdents(seurathuman, manualannotation)
+
+p <- DimPlot(seurathuman, reduction = 'wnn.umap', label = TRUE, repel = TRUE, label.size = 2.5) + NoLegend()
+ggsave(filename="UMAP_RNA_ADT_human Annotation.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+
+manualannotation <- c("CD4 TCM", "CD4 naive", "CD8 TEM", "DC", "B mem", "MAIT", "CD4 naive", "gammadelta T", "CD4 Treg", "CD4 naive", "CD16 mono", "CD56bright NK", "CD8 naive", "CD14 mono", "Erythroid", "Platelet", "CD4 naive", "CD8 naive", "DC", "CD4 TCM", "AXL DC", "CD8 prol", "CD14 mono", "CD4 naive", "dn T", "CD56dim NK", "HSPC", "B naive")
+names(manualannotation) <- levels(seurathuman)
+seurathuman <- RenameIdents(seurathuman, manualannotation)
+
+p <- DimPlot(seurathuman, reduction = 'wnn.umap', label = TRUE, repel = TRUE, label.size = 2.5) + NoLegend()
+ggsave(filename="UMAP_RNA_ADT_human Annotation 2.png",plot=p,device="png",dpi=600,path=workdirrna,height=7,width=7)
+```
